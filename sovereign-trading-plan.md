@@ -1,5 +1,4 @@
 # Blueprint: Sovereign AI Trading Analytics Engine (No-Palantir Architecture)
-<img width="523" height="502" alt="Screenshot 2026-11-07 at 7 03 50 AM" src="https://github.com/user-attachments/assets/6bb0ad5f-028c-44a6-8d3c-271ef6a77864" />
 
 This blueprint details the deployment of a fully self-hosted, privacy-first AI platform on local Linux hardware (openSUSE). This configuration mirrors corporate compliance setups by routing user prompts through an automated python-based security and middleware layer before dispatching the payload to a locally hosted instance of **Qwen2.5-Instruct 7B**. No data ever leaves the local machine, completely bypassing any reliance on cloud platforms or enterprise data management systems like Palantir.
 
