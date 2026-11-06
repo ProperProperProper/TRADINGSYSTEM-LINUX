@@ -1,0 +1,6 @@
+# Keeps builds and tests from taking the whole Mac (owner rule 2026-10-18: 16% of CPU, RAM and disk stay free; the M4 has 10 cores).
+[build]
+jobs = 6
+
+[profile.dev]
+debug = 0

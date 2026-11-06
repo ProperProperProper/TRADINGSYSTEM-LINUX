@@ -1,0 +1,2 @@
+#!/bin/sh
+[ -x target/release/thomas ] && exec target/release/thomas hook post-commit

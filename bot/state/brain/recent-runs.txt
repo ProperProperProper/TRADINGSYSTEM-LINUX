@@ -1,0 +1,60 @@
+2026-10-17 17:45 UTC risk ok in 0s: paper account over 2 days: equity 4984 (-0.32% since start), max drawdown 0.3%, 0 open positions, worst 14-session window -0.3%
+2026-10-17 17:50 UTC promotion ok in 0s: 0 variants qualify, 1 are being validated or blocked; no new packet
+2026-10-17 17:55 UTC experimenter ok in 0s: standing experiments: the deep-learning trainer is running them
+2026-10-17 18:00 UTC strategist ok in 0s: Online brain: reconciled 0 outcomes; no valid untested candle experiments available
+2026-10-17 18:05 UTC tuner ok in 0s: no tuned range: the most profitable runs do not set the margin or the DCA depth differently from all runs
+2026-10-17 18:10 UTC researcher ok in 1s: topic: volatility filter (volatility filter entry timing momentum equities) | no new paper that actually discusses volatility filter this time (4 search hits did not mention it)
+2026-10-17 18:15 UTC auditor ok in 0s: nothing new to audit
+2026-10-17 18:20 UTC execution ok in 0s: paper decisions look consistent with the backtests: nothing to report
+2026-10-17 18:25 UTC statistician ok in 0s: ML watch: too few stored trades to judge
+2026-10-17 18:30 UTC data ok in 1s: data: 496704 bars stored (701792 read this pass, 0 invalid dropped); 95 of 502 SPY holdings have candles (407 not pulled: moomoo allows 100 symbols per 7 days, 96 used and 4 left; the lab never spends that quota); newest bar 2026-10-16 19:45 UTC (0.9 days old); 0 symbols stale for over 4 days; 0 thin over the last 20 sessions
+2026-10-17 18:35 UTC steward ok in 0s: model unchanged: no bars newer than 2026-10-16 19:45 UTC since the last scoring
+2026-10-17 18:40 UTC drift ok in 0s: paper fills vs candles: 84 fills compared, average cost against the bar open +26.3 bps (the lab's cost table assumes a 3.8 bps half-spread); 42 of 42 rated entries were in the model's bottom 35%
+2026-10-17 18:45 UTC risk ok in 0s: paper account over 2 days: equity 4984 (-0.32% since start), max drawdown 0.3%, 0 open positions, worst 14-session window -0.3%
+2026-10-17 18:50 UTC promotion ok in 0s: 0 variants qualify, 1 are being validated or blocked; no new packet
+2026-10-17 18:55 UTC experimenter ok in 0s: losspause+top13 lost to the baseline by more than 2 points in 7 of 29 blocks (cut A), starting 2026-05-08, 2026-06-04, 2026-06-18, 2026-06-25, 2026-07-02, 2026-07-10 | standing experiments: the deep-learning trainer is running them
+2026-10-17 19:00 UTC strategist ok in 0s: Online brain: reconciled 0 outcomes; no valid untested candle experiments available
+2026-10-17 19:05 UTC tuner ok in 0s: no tuned range: the most profitable runs do not set the margin or the DCA depth differently from all runs
+2026-10-17 19:10 UTC researcher ok in 1s: topic: average true range (average true range volatility position sizing stocks) | no new paper that actually discusses average true range this time (5 search hits did not mention it)
+2026-10-17 19:15 UTC auditor ok in 0s: nothing new to audit
+2026-10-17 19:20 UTC execution ok in 0s: paper decisions look consistent with the backtests: nothing to report
+2026-10-17 19:25 UTC statistician ok in 0s: ML watch: too few stored trades to judge | note to strategist: Quant review: VERDICT: 1 variant(s) survive multiple testing: mlgate+top13
+2026-10-17 19:30 UTC data ok in 1s: data: 496704 bars stored (701792 read this pass, 0 invalid dropped); 95 of 502 SPY holdings have candles (407 not pulled: moomoo allows 100 symbols per 7 days, 96 used and 4 left; the lab never spends that quota); newest bar 2026-10-16 19:45 UTC (1.0 days old); 0 symbols stale for over 4 days; 0 thin over the last 20 sessions
+2026-10-17 19:37 UTC steward ok in 0s: model unchanged: no bars newer than 2026-10-16 19:45 UTC since the last scoring
+2026-10-17 19:42 UTC drift ok in 0s: paper fills vs candles: 84 fills compared, average cost against the bar open +26.3 bps (the lab's cost table assumes a 3.8 bps half-spread); 42 of 42 rated entries were in the model's bottom 35%
+2026-10-17 19:47 UTC risk ok in 0s: paper account over 2 days: equity 4984 (-0.32% since start), max drawdown 0.3%, 0 open positions, worst 14-session window -0.3%
+2026-10-17 19:52 UTC promotion ok in 0s: 0 variants qualify, 1 are being validated or blocked; no new packet
+2026-10-17 19:57 UTC experimenter ok in 0s: standing experiments: the deep-learning trainer is running them
+2026-10-17 20:02 UTC strategist ok in 0s: Online brain: reconciled 0 outcomes; no valid untested candle experiments available
+2026-10-17 20:07 UTC tuner ok in 0s: no tuned range: the most profitable runs do not set the margin or the DCA depth differently from all runs
+2026-10-17 20:12 UTC researcher ok in 0s: topic: trend strength (average directional index trend strength stock trading) | no new paper that actually discusses trend strength this time (1 search hits did not mention it)
+2026-10-17 20:17 UTC auditor ok in 0s: note to strategist: 5h|adx+top13: only 0.0 trades per block: too few to measure an edge
+2026-10-17 20:22 UTC execution ok in 0s: paper decisions look consistent with the backtests: nothing to report
+2026-10-17 20:31 UTC statistician ok in 0s: ML watch: too few stored trades to judge
+2026-10-17 20:36 UTC data ok in 1s: data: 496704 bars stored (701792 read this pass, 0 invalid dropped); 95 of 502 SPY holdings have candles (407 not pulled: moomoo allows 100 symbols per 7 days, 96 used and 4 left; the lab never spends that quota); newest bar 2026-10-16 19:45 UTC (1.0 days old); 0 symbols stale for over 4 days; 0 thin over the last 20 sessions
+2026-10-17 20:41 UTC steward ok in 0s: model unchanged: no bars newer than 2026-10-16 19:45 UTC since the last scoring
+2026-10-17 20:46 UTC drift ok in 0s: paper fills vs candles: 84 fills compared, average cost against the bar open +26.3 bps (the lab's cost table assumes a 3.8 bps half-spread); 42 of 42 rated entries were in the model's bottom 35%
+2026-10-17 20:51 UTC risk ok in 0s: paper account over 2 days: equity 4984 (-0.32% since start), max drawdown 0.3%, 0 open positions, worst 14-session window -0.3%
+2026-10-17 20:56 UTC promotion ok in 0s: 0 variants qualify, 1 are being validated or blocked; no new packet
+2026-10-17 21:01 UTC experimenter ok in 0s: entry0+top13 lost to the baseline by more than 2 points in 6 of 30 blocks (cut A), starting 2026-05-08, 2026-06-18, 2026-06-25, 2026-07-10, 2026-08-05, 2026-09-29 | standing experiments: the deep-learning trainer is running them
+2026-10-17 21:06 UTC strategist ok in 0s: Online brain: reconciled 0 outcomes; no valid untested candle experiments available
+2026-10-17 21:11 UTC tuner ok in 0s: no tuned range: the most profitable runs do not set the margin or the DCA depth differently from all runs
+2026-10-17 21:16 UTC researcher ok in 1s: topic: efficiency ratio (Kaufman efficiency ratio trend noise stocks) | no new paper that actually discusses efficiency ratio this time (5 search hits did not mention it)
+2026-10-17 21:24 UTC auditor ok in 0s: nothing new to audit
+2026-10-17 21:29 UTC execution ok in 0s: note to strategist: Bot execution: the rejected symbols the bot listed at its latest decision (ABBV, ABT, ACN, ADI) share one reason: no signal value (not enough history or data)
+2026-10-17 21:34 UTC statistician ok in 0s: ML watch: too few stored trades to judge
+2026-10-17 21:39 UTC data ok in 4s: data: 496704 bars stored (701792 read this pass, 0 invalid dropped); 95 of 502 SPY holdings have candles (407 not pulled: moomoo allows 100 symbols per 7 days, 96 used and 4 left; the lab never spends that quota); newest bar 2026-10-16 19:45 UTC (1.1 days old); 0 symbols stale for over 4 days; 0 thin over the last 20 sessions
+2026-10-17 21:44 UTC steward ok in 0s: model unchanged: no bars newer than 2026-10-16 19:45 UTC since the last scoring
+2026-10-17 21:49 UTC drift ok in 0s: paper fills vs candles: 84 fills compared, average cost against the bar open +26.3 bps (the lab's cost table assumes a 3.8 bps half-spread); 42 of 42 rated entries were in the model's bottom 35%
+2026-10-17 21:54 UTC risk ok in 0s: paper account over 2 days: equity 4984 (-0.32% since start), max drawdown 0.3%, 0 open positions, worst 14-session window -0.3%
+2026-10-17 21:59 UTC promotion ok in 0s: 0 variants qualify, 1 are being validated or blocked; no new packet
+2026-10-17 22:04 UTC experimenter ok in 0s: standing experiments: the deep-learning trainer is running them
+2026-10-17 22:09 UTC strategist ok in 0s: Online brain: reconciled 0 outcomes; no valid untested candle experiments available | plan: whiteboard: plan set (2 items)
+2026-10-17 22:14 UTC tuner ok in 0s: no tuned range: the most profitable runs do not set the margin or the DCA depth differently from all runs
+2026-10-17 22:20 UTC researcher ok in 1s: topic: crash protection (crash protection momentum strategies drawdown equities) | no new paper that actually discusses crash protection this time (5 search hits did not mention it)
+2026-10-17 22:25 UTC auditor ok in 0s: nothing new to audit
+2026-10-17 22:30 UTC execution ok in 0s: paper decisions look consistent with the backtests: nothing to report
+2026-10-17 22:35 UTC statistician ok in 0s: ML watch: too few stored trades to judge
+2026-10-17 22:40 UTC data ok in 1s: data: 496704 bars stored (701792 read this pass, 0 invalid dropped); 95 of 502 SPY holdings have candles (407 not pulled: moomoo allows 100 symbols per 7 days, 96 used and 4 left; the lab never spends that quota); newest bar 2026-10-16 19:45 UTC (1.1 days old); 0 symbols stale for over 4 days; 0 thin over the last 20 sessions
+2026-10-17 22:45 UTC steward ok in 0s: model unchanged: no bars newer than 2026-10-16 19:45 UTC since the last scoring
+2026-10-17 22:50 UTC drift ok in 0s: paper fills vs candles: 84 fills compared, average cost against the bar open +26.3 bps (the lab's cost table assumes a 3.8 bps half-spread); 42 of 42 rated entries were in the model's bottom 35%

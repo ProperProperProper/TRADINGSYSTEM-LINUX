@@ -1,0 +1,4 @@
+# Pinned versions (owner 2026-10-10: never upgrade systems once everything works). The lab monitor compares
+# these with what is installed every 15 min and raises a fault on any change. Change only on the owner's decision.
+rustc 1.98.1
+protoc 36.2

@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPY Bot Lab monitor</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mute:#5d6673;--line:#e1e5eb;--ok:#1a7f4b;--okbg:#e4f5ec;--warn:#9a5b00;--warnbg:#fdf0d8;--bad:#b3261e;--badbg:#fbe4e2;--info:#1d5fd1;--infobg:#e3edfd;--bar:#2b6cb0;--barbg:#e6ebf2;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1318;--card:#171c23;--ink:#e8ecf1;--mute:#97a1ae;--line:#262d37;--ok:#5fd39b;--okbg:#12301f;--warn:#f0b64a;--warnbg:#33260c;--bad:#ff8a80;--badbg:#3a1714;--info:#8ab4ff;--infobg:#142544;--bar:#6aa3ff;--barbg:#222a35;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:0 16px}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 48px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px}
+h1{font-size:20px;margin:0;font-weight:650;letter-spacing:.2px}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);margin:26px 0 10px;font-weight:650}
+.sub{color:var(--mute);font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:5px 12px;font-weight:600;font-size:13px}
+.pill i{width:9px;height:9px;border-radius:50%;background:currentColor;display:inline-block}
+.ok{color:var(--ok);background:var(--okbg)}.attention{color:var(--warn);background:var(--warnbg)}.stopped,.bad{color:var(--bad);background:var(--badbg)}.info{color:var(--info);background:var(--infobg)}.mute{color:var(--mute);background:var(--barbg)}
+.grid{display:grid;gap:12px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.two{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+.kpi .v{font-size:26px;font-weight:650;line-height:1.1}.kpi .l{color:var(--mute);font-size:12px;margin-top:4px}
+.kpi .n{font-size:12px;color:var(--mute);margin-top:2px}
+.row{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.row b{font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-weight:600;color:var(--mute);text-align:left;font-size:12px;border-bottom:1px solid var(--line);padding:6px 8px 6px 0;white-space:nowrap}
+td{padding:7px 8px 7px 0;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.scroll{overflow-x:auto}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.chip{display:inline-block;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600;margin:0 4px 3px 0}
+.badge{display:inline-block;border-radius:6px;padding:1px 8px;font-size:12px;font-weight:600}
+ul.clean{margin:0;padding-left:18px}ul.clean li{margin:3px 0}
+.empty{color:var(--mute);font-style:italic}
+.ticks{display:grid;gap:3px;overflow-x:auto;padding-bottom:4px}
+.tickrow{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mute);white-space:nowrap}
+.tickrow .t{width:92px;flex:none}
+.cell{width:14px;height:14px;border-radius:3px;flex:none;background:var(--barbg)}
+.cell.s-ok{background:var(--ok)}.cell.s-skipped{background:#98a2b3}.cell.s-failed{background:var(--bad)}.cell.s-blocked{background:var(--warn)}
+.legend{display:flex;gap:14px;font-size:11px;color:var(--mute);margin-top:8px;flex-wrap:wrap}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:var(--c)}
+svg text{fill:var(--mute);font-size:10px}
+.err{color:var(--bad)}
+.org{display:grid;gap:6px}
+.tier{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.node{flex:1 1 150px;max-width:230px;border:1px solid var(--line);border-left:4px solid var(--c,var(--line));border-radius:10px;padding:8px 10px;background:var(--card)}
+.node b{display:block;font-size:13px}.node .r{font-size:11.5px;color:var(--mute);margin-top:2px}.node .s{font-size:11px;margin-top:4px}
+.flow{text-align:center;font-size:11px;color:var(--mute)}
+.tierlabel{text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);margin-top:4px}
+.team{border:2px solid #8a5cf6;border-radius:14px;padding:10px;background:color-mix(in srgb,#8a5cf6 6%,var(--card))}
+
+details.group{margin-top:22px}details.group>summary{cursor:pointer;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);font-weight:650}
+@media (max-width:520px){h1{font-size:18px}.kpi .v{font-size:22px}}
+#better .banner{margin-bottom:10px;padding:14px 16px;border-radius:10px;border:2px solid var(--ok);background:var(--okbg);color:var(--ink);animation:flash 1.1s steps(2,jump-none) infinite}
+#better .banner b{color:var(--ok)}
+#better .quiet{margin-bottom:8px;font-size:13px;color:var(--mute)}
+@keyframes flash{0%{background:var(--okbg);border-color:var(--ok)}100%{background:var(--card);border-color:var(--info)}}
+@media (prefers-reduced-motion:reduce){#better .banner{animation-duration:3s}}
+.pos{color:var(--ok)}.neg{color:var(--bad)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>SPY Bot Lab monitor</h1>
+      <div class="sub" id="meta">loading…</div>
+    </div>
+    <div id="status" class="pill mute"><i></i><span>connecting</span></div>
+  </header>
+  <div id="fresh" style="margin-bottom:10px"></div>
+  <div id="better"></div>
+  <div id="alerts"></div>
+  <div id="app"></div>
+  <div class="card" id="livelogs" style="margin-top:16px;padding:14px">
+    <h2 style="margin:0 0 8px">Live logs <span class="sub" id="logmeta"></span></h2>
+    <div id="logtabs" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+    <div style="overflow-x:auto"><pre id="logtext" style="margin:0;max-height:420px;overflow:auto;font-size:12px;white-space:pre">loading…</pre></div>
+  </div>
+</div>
+<script>
+"use strict";
+// The first element matching CSS selector `s`.
+const $=s=>document.querySelector(s);
+// Creates element `tag` with attributes and children (text or nodes).
+function h(tag,attrs,...kids){const e=document.createElement(tag);if(attrs)for(const[k,v]of Object.entries(attrs)){if(k==="class")e.className=v;else if(k==="style")e.style.cssText=v;else e.setAttribute(k,v);}
+  for(const k of kids.flat()){if(k==null||k===false)continue;e.append(k.nodeType?k:document.createTextNode(String(k)));}return e;}
+// Number with up to `d` decimals, locale-formatted ('—' when missing).
+const fmt=(x,d=2)=>x==null||Number.isNaN(x)?"—":Number(x).toLocaleString(undefined,{maximumFractionDigits:d,minimumFractionDigits:0});
+// Signed number with `d` decimals ('—' when missing).
+const sgn=(x,d=4)=>x==null||Number.isNaN(x)?"—":(x>=0?"+":"")+Number(x).toFixed(d);
+// Signed whole USD amount ('—' when missing).
+const usd=x=>x==null||Number.isNaN(x)?"—":(x>=0?"+":"−")+Math.abs(Number(x)).toLocaleString(undefined,{maximumFractionDigits:0});
+// How long ago unix time `ts` was, relative to `now`.
+function ago(ts,now){if(!ts)return"never";const s=Math.max(0,now-ts);if(s<90)return s+"s ago";if(s<5400)return Math.round(s/60)+" min ago";if(s<172800)return Math.round(s/3600)+" h ago";return Math.round(s/86400)+" d ago";}
+// Unix time `ts` as a short local date and time.
+function dt(ts){return ts?new Date(ts*1000).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):"—";}
+// A coloured status badge.
+function pill(level,text){return h("span",{class:"badge "+level},text);}
+// A horizontal progress bar filled to `frac` (0..1).
+// A card with an optional title and body elements.
+function card(title,...body){return h("div",{class:"card"},title?h("div",{class:"sub",style:"margin-bottom:8px;font-weight:600"},title):null,...body);}
+// A table with header `head`, rows `rows`, right-aligned numeric columns `numCols`.
+function table(head,rows,numCols=[]){const t=h("table",null,h("thead",null,h("tr",null,head.map((c,i)=>h("th",{class:numCols.includes(i)?"num":""},c)))),
+  h("tbody",null,rows.map(r=>h("tr",null,r.map((c,i)=>h("td",{class:numCols.includes(i)?"num":""},c))))));return h("div",{class:"scroll"},t);}
+// Daily PnL bar chart: green up for winning days, red down for losing days, grey for days with no closed trade.
+function pnlBars(series,w=520,hgt=170){ // series: [{label,pnl,pct,trades,wins,losses}] green up = winning day, red down = losing day
+  const ns="http://www.w3.org/2000/svg";if(!series.length){return h("div",{class:"empty"},"no trades yet");}
+  const svg=document.createElementNS(ns,"svg");svg.setAttribute("viewBox",`0 0 ${w} ${hgt}`);svg.setAttribute("width","100%");svg.style.font="9px system-ui";
+  const T=14,B=16,mid=(hgt-T-B)/2+T,half=(hgt-T-B)/2-10,max=Math.max(...series.map(s=>Math.abs(s.pct||0)),0.01),step=(w-30)/series.length,bw=Math.max(3,Math.min(26,step-3));
+  const add=(tag,a,txt)=>{const e=document.createElementNS(ns,tag);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;svg.append(e);return e;};
+  add("line",{x1:20,x2:w,y1:mid,y2:mid,stroke:"var(--line,#ccc)","stroke-width":1});
+  const every=Math.max(1,Math.ceil(30/step));let lastLabel=-every; // a % label needs ~30 units: thin by spacing, not index (hover shows every value)
+  series.forEach((s,i)=>{const x=24+i*step;
+    if(s.none){const r=add("rect",{x:x,y:mid-2,width:bw,height:4,rx:2,fill:"#8c959f"});const t=document.createElementNS(ns,"title");t.textContent=s.label+": no closed trade ("+(s.runs??"?")+" runs covered this day, 0 USD)";r.append(t);
+      if(step>=14)add("text",{x:x+bw/2,y:mid-5,"text-anchor":"middle",fill:"#8c959f"},"—");if(i%Math.ceil(series.length/8)===0)add("text",{x:x,y:hgt-3,fill:"currentColor"},s.label);return;}
+    const known=s.pct!=null,v=known?s.pct:0,bh=known?Math.max(1,half*Math.abs(v)/max):1,up=v>=0,col=!known?"#8c959f":up?"#1a7f37":"#cf222e";
+    const r=add("rect",{x:x,y:up?mid-bh:mid,width:bw,height:bh,rx:2,fill:col});
+    const t=document.createElementNS(ns,"title");t.textContent=s.label+": "+usd(s.pnl)+" USD ("+(known?sgn(v,2)+"%":"% n/a")+") per account; "+s.trades+" trades closed ("+s.wins+" won / "+s.losses+" lost"+(s.trades?", "+Math.round(s.wins/s.trades*100)+"% win rate":"")+") across "+(s.runs??"?")+" runs";r.append(t);
+    if(known&&i-lastLabel>=every&&(lastLabel=i,true))add("text",{x:x+bw/2,y:up?mid-bh-2:mid+bh+9,"text-anchor":"middle",fill:col},sgn(v,1)+"%");
+    if(i%Math.ceil(series.length/8)===0)add("text",{x:x,y:hgt-3,fill:"currentColor"},s.label);});
+  add("text",{x:0,y:9,fill:"currentColor"},"±"+max.toFixed(1)+"%");return svg;}
+
+// --- charts for the AI agents (same look as pnlBars: green up = gain, red down = loss, grey = nothing / reference)
+const NS="http://www.w3.org/2000/svg";
+function svgBox(w,hgt){const svg=document.createElementNS(NS,"svg");svg.setAttribute("viewBox",`0 0 ${w} ${hgt}`);svg.setAttribute("width","100%");svg.style.font="9px system-ui";
+  const add=(tag,a,txt)=>{const e=document.createElementNS(NS,tag);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;svg.append(e);return e;};
+  const tip=(el,txt)=>{const t=document.createElementNS(NS,"title");t.textContent=txt;el.append(t);};return {svg,add,tip};}
+const shortDate=ts=>new Date(ts*1000).toLocaleDateString([], {month:"2-digit",day:"2-digit"});
+// an axis label: the date, or the time of day when the axis spans less than two days
+const axisLabel=(ts,span)=>span<2*86400?new Date(ts*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}):shortDate(ts);
+// Per-block returns of a variant (bars) next to the current strategy on the same blocks (grey tick); dashed line = where the
+// agents' view ends: blocks left of it are the training half they see, right of it the unseen half the code judges on.
+function blockBars(run,w=640,hgt=200){
+  const b=run.blocks||[];if(!b.length)return h("div",{class:"empty"},"no per-block data yet");
+  const {svg,add,tip}=svgBox(w,hgt),T=16,B=18,mid=(hgt-T-B)/2+T,half=(hgt-T-B)/2-12;
+  const max=Math.max(0.5,...b.map(x=>Math.abs(x.ret)),...b.map(x=>Math.abs(x.base??0))),step=(w-34)/b.length,bw=Math.max(3,Math.min(24,step-4));
+  add("line",{x1:28,x2:w,y1:mid,y2:mid,stroke:"var(--line,#ccc)"});
+  b.forEach((x,i)=>{const X=30+i*step,none=x.trades===0;
+    const bh=none?2:Math.max(1,half*Math.abs(x.ret)/max),up=x.ret>=0,col=none?"#8c959f":up?"#1a7f37":"#cf222e";
+    const r=add("rect",{x:X,y:none?mid-1:up?mid-bh:mid,width:bw,height:bh,rx:2,fill:col});
+    tip(r,shortDate(x.start)+" block: "+(none?"no trade":sgn(x.ret,2)+"%")+" ("+x.trades+" trades, "+x.wins+" won) vs current "+(x.base==null?"n/a":sgn(x.base,2)+"%")+(i<run.split?" — training half (agents saw this)":" — unseen half (judged by code)"));
+    if(x.base!=null){const by=mid-(half*x.base/max);add("line",{x1:X-2,x2:X+bw+2,y1:by,y2:by,stroke:"#57606a","stroke-width":2});}
+    if(!none&&step>=18)add("text",{x:X+bw/2,y:up?mid-bh-3:mid+bh+9,"text-anchor":"middle",fill:col},sgn(x.ret,1));
+    if(i%Math.ceil(b.length/9)===0&&i<b.length-2)add("text",{x:X,y:hgt-4,fill:"currentColor"},shortDate(x.start));});
+  add("text",{x:w-2,y:hgt-4,"text-anchor":"end",fill:"currentColor"},shortDate(b[b.length-1].start));
+  const sx=30+run.split*step-2;add("line",{x1:sx,x2:sx,y1:T-6,y2:hgt-B,stroke:"#8250df","stroke-dasharray":"4 3"});
+  add("text",{x:sx-4,y:T-2,"text-anchor":"end",fill:"#8250df"},"training half (agents see) ◀");add("text",{x:sx+4,y:T-2,fill:"#8250df"},"▶ unseen half (code judges)");
+  add("text",{x:0,y:mid-half-2,fill:"currentColor"},"+"+max.toFixed(1)+"%");add("text",{x:0,y:mid+half+8,fill:"currentColor"},"-"+max.toFixed(1)+"%");return svg;}
+// Line chart: series [{name,color,points:[[x,y],...]}]; x = unix seconds or index; yFmt formats the axis.
+function lines(series,{w=640,hgt=180,yFmt=v=>fmt(v,0),xDate=true,zero=null}={}){
+  const all=series.flatMap(s=>s.points);if(!all.length)return h("div",{class:"empty"},"no data yet");
+  const {svg,add,tip}=svgBox(w,hgt),L=46,R=8,T=10,B=18;
+  const xs=all.map(p=>p[0]),ys=all.map(p=>p[1]).concat(zero==null?[]:[zero]),x0=Math.min(...xs),x1=Math.max(...xs,x0+1),y0=Math.min(...ys),y1=Math.max(...ys,y0+1e-9);
+  const X=x=>L+(x-x0)/(x1-x0)*(w-L-R),Y=y=>T+(y1-y)/(y1-y0||1)*(hgt-T-B);
+  [y0,(y0+y1)/2,y1].forEach(v=>{add("line",{x1:L,x2:w-R,y1:Y(v),y2:Y(v),stroke:"var(--line,#e1e5eb)"});add("text",{x:2,y:Y(v)+3,fill:"currentColor"},yFmt(v));});
+  if(zero!=null&&zero>y0&&zero<y1)add("line",{x1:L,x2:w-R,y1:Y(zero),y2:Y(zero),stroke:"#8c959f","stroke-dasharray":"3 3"});
+  [x0,(x0+x1)/2,x1].forEach((v,i)=>add("text",{x:X(v),y:hgt-4,"text-anchor":i===0?"start":i===2?"end":"middle",fill:"currentColor"},xDate?axisLabel(v,x1-x0):fmt(v,0)));
+  series.forEach(s=>{if(!s.points.length)return;add("path",{d:s.points.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+","+Y(p[1]).toFixed(1)).join(""),fill:"none",stroke:s.color,"stroke-width":s.width||2});
+    const lp=s.points[s.points.length-1],c=add("circle",{cx:X(lp[0]),cy:Y(lp[1]),r:3,fill:s.color});tip(c,s.name+": "+yFmt(lp[1]));});
+  return svg;}
+// Horizontal bars, centred on zero: items [{label,value,note}]
+function hbars(items,{w=640,unit=" pts",d=2}={}){
+  if(!items.length)return h("div",{class:"empty"},"no data yet");
+  const rowH=20,hgt=items.length*rowH+8,{svg,add,tip}=svgBox(w,hgt),L=170,R=70,mid=L+(w-L-R)/2,max=Math.max(0.1,...items.map(i=>Math.abs(i.value??0)));
+  add("line",{x1:mid,x2:mid,y1:0,y2:hgt,stroke:"#8c959f"});
+  items.forEach((it,i)=>{const y=4+i*rowH,v=it.value??0,len=(w-L-R)/2*Math.abs(v)/max,col=it.value==null?"#8c959f":v>=0?"#1a7f37":"#cf222e";
+    add("text",{x:0,y:y+12,fill:"currentColor"},it.label);const r=add("rect",{x:v>=0?mid:mid-len,y:y+2,width:Math.max(1,len),height:rowH-6,rx:2,fill:col});tip(r,it.label+": "+(it.value==null?"n/a":sgn(v,d)+unit)+(it.note?" — "+it.note:""));
+    add("text",{x:w-R+4,y:y+12,fill:col},it.value==null?"—":sgn(v,d)+unit);});return svg;}
+// Vertical bars: items [{label,v,note,ref}] (green up / red down, grey tick = reference value); `unit` is added to the labels.
+function colBars(items,{w=640,hgt=170,unit="",d=1}={}){
+  if(!items.length)return h("div",{class:"empty"},"no data yet");
+  const {svg,add,tip}=svgBox(w,hgt),T=14,B=18,L=34,mid=(hgt-T-B)/2+T,half=(hgt-T-B)/2-8,step=(w-L-4)/items.length,bw=Math.max(4,Math.min(40,step-4));
+  const max=Math.max(1e-9,...items.map(i=>Math.abs(i.v??0)),...items.map(i=>Math.abs(i.ref??0)));
+  add("line",{x1:L-4,x2:w,y1:mid,y2:mid,stroke:"var(--line,#ccc)"});add("text",{x:0,y:T,fill:"currentColor"},"+"+fmt(max,d));add("text",{x:0,y:hgt-B,fill:"currentColor"},"-"+fmt(max,d));
+  items.forEach((it,i)=>{const X=L+i*step,v=it.v,up=(v??0)>=0,bh=v==null?1:Math.max(1,half*Math.abs(v)/max),col=v==null?"#8c959f":up?"#1a7f37":"#cf222e";
+    const r=add("rect",{x:X,y:up?mid-bh:mid,width:bw,height:bh,rx:2,fill:col});tip(r,it.label+": "+(v==null?"n/a":sgn(v,d)+unit)+(it.note?" — "+it.note:""));
+    if(it.ref!=null){const y=mid-half*it.ref/max;add("line",{x1:X-2,x2:X+bw+2,y1:y,y2:y,stroke:"#57606a","stroke-width":2});}
+    if(step>=22&&v!=null)add("text",{x:X+bw/2,y:up?mid-bh-3:mid+bh+9,"text-anchor":"middle",fill:col},sgn(v,d));
+    if(i%Math.ceil(items.length/10)===0)add("text",{x:X,y:hgt-4,fill:"currentColor"},String(it.label).slice(0,12));});
+  return svg;}
+// Points with intervals in the order they happened: items [{v,lo,hi,hl,kind}]; green = interval above zero, highlighted ring = champion.
+function errPoints(items,{w=640,hgt=190,d=3}={}){
+  const ok=items.filter(i=>i.v!=null);if(!ok.length)return h("div",{class:"empty"},"no data yet");
+  const {svg,add,tip}=svgBox(w,hgt),L=48,T=10,B=18,lo=Math.min(0,...ok.map(i=>i.lo??i.v)),hi=Math.max(0,...ok.map(i=>i.hi??i.v)),Y=y=>T+(hi-y)/((hi-lo)||1)*(hgt-T-B),step=(w-L-6)/items.length;
+  [lo,0,hi].forEach(v=>{add("line",{x1:L,x2:w-4,y1:Y(v),y2:Y(v),stroke:v===0?"#8c959f":"var(--line,#e1e5eb)","stroke-dasharray":v===0?"3 3":""});add("text",{x:2,y:Y(v)+3,fill:"currentColor"},sgn(v,d));});
+  items.forEach((it,i)=>{if(it.v==null)return;const X=L+i*step+step/2,good=(it.lo??-1)>0,col=good?"#1a7f37":it.kind==="Transformer"?"#8250df":"#0969da";
+    if(it.lo!=null&&it.hi!=null)add("line",{x1:X,x2:X,y1:Y(it.lo),y2:Y(it.hi),stroke:col,opacity:.45});
+    const c=add("circle",{cx:X,cy:Y(it.v),r:it.hl?5:3,fill:col,stroke:it.hl?"#bf8700":"none","stroke-width":2});tip(c,"#"+it.id+" "+(it.kind||"")+": "+sgn(it.v,d)+(it.lo!=null?" ["+sgn(it.lo,d)+", "+sgn(it.hi,d)+"]":""));});
+  add("text",{x:L,y:hgt-4,fill:"currentColor"},"first tried");add("text",{x:w-4,y:hgt-4,"text-anchor":"end",fill:"currentColor"},"newest");return svg;}
+// Stacked daily counts: items [{t,total,part}] (part drawn red on top of the grey total), for the security guard counter.
+function stackBars(items,{w=640,hgt=120}={}){
+  if(!items.length)return h("div",{class:"empty"},"nothing screened yet");
+  const {svg,add,tip}=svgBox(w,hgt),L=34,T=10,B=18,max=Math.max(1,...items.map(i=>i.total)),step=(w-L-4)/items.length,bw=Math.max(4,Math.min(36,step-4)),H=hgt-T-B;
+  add("text",{x:0,y:T+3,fill:"currentColor"},String(max));add("line",{x1:L-4,x2:w,y1:hgt-B,y2:hgt-B,stroke:"var(--line,#ccc)"});
+  items.forEach((it,i)=>{const X=L+i*step,hh=Math.max(1,H*it.total/max),ph=H*it.part/max;const r=add("rect",{x:X,y:hgt-B-hh,width:bw,height:hh,rx:2,fill:"#8c959f"});
+    if(it.part>0)add("rect",{x:X,y:hgt-B-ph,width:bw,height:ph,rx:2,fill:"#cf222e"});tip(r,shortDate(it.t)+": "+it.total+" texts screened, "+it.part+" withheld");
+    if(i%Math.ceil(items.length/8)===0)add("text",{x:X,y:hgt-4,fill:"currentColor"},shortDate(it.t));});
+  return svg;}
+// The equity of one USD account compounded over a variant's non-overlapping blocks, and its drawdown from the running peak.
+function equityDrawdown(series,cap){
+  let eq=cap,peak=cap;const e=[],dd=[];for(const b of series.filter(x=>x.chain)){eq*=1+b.ret/100;peak=Math.max(peak,eq);e.push([b.start+20*86400,eq]);dd.push([b.start+20*86400,(eq/peak-1)*100]);}
+  return {e,dd};}
+// BACKTEST CHARTS from the snapshot: holdout gain over the current strategy per variant (cuts A and B), win rate, per-block returns, equity and drawdown.
+function backtestCharts(inp){
+  const lb=(inp.leaderboard||[]).filter(l=>l.interval==="5h"&&l.a&&l.baseline_a),out=[];
+  const gain=(cut)=>lb.filter(l=>l[cut]&&l["baseline_"+cut]&&l[cut].h2!=null).map(l=>({label:l.tokens,value:l[cut].h2-l["baseline_"+cut].h2,note:l.status+"; "+sgn(l[cut].h2,2)+"% vs "+sgn(l["baseline_"+cut].h2,2)+"% per block"})).sort((x,y)=>y.value-x.value).slice(0,14);
+  out.push(card("Holdout comparison: gain over the current strategy on the unseen blocks, cut A (points per block, best 14)",hbars(gain("a")),h("div",{class:"sub",style:"margin-top:4px"},"Green = better than the current strategy on blocks the brain never saw; red = worse. Cut B (differently cut blocks) next.")));
+  out.push(card("Holdout comparison, cut B (the same variants on differently cut blocks)",hbars(gain("b"))));
+  const win=lb.filter(l=>l.a.win2!=null&&l.baseline_a.win2!=null).map(l=>({label:l.tokens,value:l.a.win2-l.baseline_a.win2,note:fmt(l.a.win2,0)+"% vs "+fmt(l.baseline_a.win2,0)+"% of trades profitable"})).sort((x,y)=>y.value-x.value).slice(0,14);
+  out.push(card("Trade win rate vs the current strategy, unseen blocks (points; a winner must not lower it)",hbars(win,{d:1})));
+  const bc=inp.block_compare||[],base=cut=>bc.find(x=>x.variant==="baseline"&&x.cut===cut);
+  for(const cut of ["A","B"]){const b0=base(cut);
+    for(const v of bc.filter(x=>x.cut===cut&&x.variant!=="baseline")){
+      const bm=new Map(((b0&&b0.blocks)||[]).map(x=>[x.start,x.ret])),blocks=v.blocks.map(x=>({start:x.start,ret:x.ret,trades:x.trades,wins:x.wins,base:bm.has(x.start)?bm.get(x.start):null}));
+      out.push(card("Per-block returns, cut "+cut+": "+v.variant+" (bars) vs the current strategy (grey ticks)",blockBars({blocks,split:Math.floor(blocks.length/2)}),
+        h("div",{class:"sub",style:"margin-top:4px"},"Each bar is one 14-session block; the dashed line splits the half the brain saw from the unseen half. Win rate per block next."),
+        colBars(v.blocks.map(x=>({label:shortDate(x.start),v:x.trades?100*x.wins/x.trades-50:null,note:x.wins+" of "+x.trades+" trades won"})),{unit:" pts vs 50%",d:0})));}
+    if(b0)out.push(card("Current strategy, per-block returns, cut "+cut,blockBars({blocks:b0.blocks.map(x=>({start:x.start,ret:x.ret,trades:x.trades,wins:x.wins,base:null})),split:Math.floor(b0.blocks.length/2)})));}
+  const a0=base("A"),best=bc.find(x=>x.cut==="A"&&x.variant!=="baseline");
+  if(a0&&a0.blocks.some(x=>x.chain)){const cap=5000,eb=equityDrawdown(a0.blocks,cap),ev=best?equityDrawdown(best.blocks,cap):null,S=[{name:"current strategy",color:"#8c959f",points:eb.e}];if(ev)S.push({name:best.variant,color:"#1a7f37",points:ev.e});
+    const D=[{name:"current strategy",color:"#8c959f",points:eb.dd}];if(ev)D.push({name:best.variant,color:"#cf222e",points:ev.dd});
+    out.push(card("Equity of one "+fmt(cap,0)+" USD account over consecutive blocks (cut A)",lines(S,{yFmt:v=>fmt(v,0),zero:cap})));
+    out.push(card("Drawdown from the running peak (cut A, % of the account)",lines(D,{yFmt:v=>fmt(v,1)+"%",zero:0})));}
+  return out;}
+// MODEL CHARTS
+function calibrationChart(md){return colBars((md.calibration||[]).map(b=>({label:fmt(b.pct_lo,0)+"-"+fmt(b.pct_hi,0),v:b.mean_bps,note:"hit rate "+fmt(b.hit*100,0)+"%, n "+fmt(b.n,0)})),{unit:" bps",d:1});}
+function versionsChart(vs){const v=(vs||[]).slice().reverse();if(v.length<2)return h("div",{class:"empty"},"fewer than two model versions so far");
+  return lines([{name:"held-out IC",color:"#0969da",points:v.map((x,i)=>[i,x.heldout_ic??0])},{name:"live IC",color:"#1a7f37",points:v.filter(x=>x.live_ic!=null).map(x=>[v.indexOf(x),x.live_ic])}],{xDate:false,yFmt:x=>x.toFixed(3),zero:0,w:640,hgt:150});}
+function liveRecordChart(sh){if(!sh||!sh.length)return h("div",{class:"empty"},"no resolved live call yet (every call is scored once its session has passed)");
+  return lines([{name:"top quarter of calls",color:"#1a7f37",points:sh.filter(x=>x.top!=null).map(x=>[x.t,x.top])},{name:"bottom quarter",color:"#cf222e",points:sh.filter(x=>x.bottom!=null).map(x=>[x.t,x.bottom])}],{yFmt:v=>fmt(v,0)+" bps",zero:0,hgt:150});}
+function volChart(vt){if(!vt||vt.length<3)return h("div",{class:"empty"},"the volatility track is written by the steward once a day; not there yet");
+  return lines([{name:"realised",color:"#8c959f",points:vt.map(x=>[x.t,x.realised])},{name:"naive forecast",color:"#bf8700",points:vt.map(x=>[x.t,x.naive])},{name:"model forecast",color:"#0969da",points:vt.map(x=>[x.t,x.model])}],{yFmt:v=>fmt(v,2)+"%",hgt:170});}
+// Timeline dots: rows = agents; each run a dot (green = finished, red = failed or timed out); x = time
+function dots(runs,agents,{w=640,days=3,now=Date.now()/1000}={}){
+  // the axis starts at the first run shown (at most `days` back, at least 6 hours), so a short history is not squeezed
+  const first=Math.min(now-6*3600,...runs.map(r=>r.ts)),x0=Math.max(now-days*86400,first-1800);
+  const rowH=18,hgt=agents.length*rowH+20,{svg,add,tip}=svgBox(w,hgt),L=130,X=t=>L+(t-x0)/(now-x0)*(w-L-8);
+  agents.forEach((a,i)=>{add("text",{x:0,y:12+i*rowH,fill:"currentColor"},a);add("line",{x1:L,x2:w-8,y1:8+i*rowH,y2:8+i*rowH,stroke:"var(--line,#e1e5eb)"});});
+  for(let k=0;k<=4;k++){const t=x0+(now-x0)*k/4;add("text",{x:X(t),y:hgt-4,"text-anchor":k===0?"start":k===4?"end":"middle",fill:"currentColor"},axisLabel(t,now-x0));}
+  runs.forEach(r=>{const i=agents.indexOf(r.agent);if(i<0||r.ts<x0)return;const c=add("circle",{cx:X(r.ts),cy:8+i*rowH,r:4,fill:r.rc===0?"#1a7f37":"#cf222e"});tip(c,r.agent+" "+new Date(r.ts*1000).toLocaleString()+": "+(r.rc===0?"finished":"exit "+r.rc+(r.rc===142?" (time limit)":""))+" in "+Math.round(r.secs/60)+" min");});
+  return svg;}
+// Renders the whole dashboard from one snapshot `d`.
+// The team's org chart: who does what, live (last run of each specialist, last activity of each Claude job and service).
+function orgChart(t,hl,now){
+  t=t||{claude:{}};
+  const node=(c,name,role,status)=>h("div",{class:"node",style:"--c:"+c},h("b",null,name),h("div",{class:"r"},role),status?h("div",{class:"s"},status):null);
+  const last=a=>a==null?h("span",{class:"sub"},"no log yet"):h("span",{class:"sub"},"last active "+ago(now-a,now));
+  const C="var(--info)",H="#8a5cf6",K="var(--ok)",M="var(--warn)";
+  const cl=t.claude||{};
+  return card(null,
+    h("div",{class:"sub",style:"margin-bottom:10px"},"Who does what. The brain runs twelve roles, one every 5 minutes. Its hourly strategist uses two agreeing load-balanced OpenCode free models, then Claude or OpenCode validation, with persistent SQLite memory. Unattended automation never launches Codex. Rust ML/deep-learning models train on stored candle values; deterministic code tests and decides. Live: each box shows its newest activity."),
+    h("div",{class:"org"},
+      h("div",{class:"tier"},node("var(--ink)","Owner","rules and goals (CLAUDE.md, AGENTS.md)")),
+      h("div",{class:"flow"},"▼ rules"),
+      h("div",{class:"tierlabel"},"Claude Code: managers (run only when there is work)"),
+      h("div",{class:"tier"},
+        node(C,"Scrum master","Claude · hourly: sprint, retro, builds code",last(cl.supervisor)),
+        node(C,"Log doctor","Sonnet · hourly with open warnings: fixes faults",last(cl.logdoctor)),
+        node(C,"Promotion","Sonnet · market closed: applies a fully validated variant",last(cl.promote)),
+        node(C,"Fix report","Sonnet · daily: problem / solution / action",last(cl.fixreport))),
+      h("div",{class:"flow"},"▼ sprint (one task each), notes, memory fixes"),
+      h("div",{class:"team"},
+        h("div",{class:"tierlabel",style:"margin:0 0 8px"},"The lab's own models: the research team"),
+        h("div",{class:"sub",style:"text-align:center;margin-bottom:8px"},"Rust only, CPU only. The brain's roles report (strategist, tuner, researcher, auditor, statistician, execution) and act (data, model steward, drift, risk, promotion, experimenter) within checked limits; the trainer evolves deep networks around the clock; the ML model ranks the bot's top-20 stocks. Everything is judged on blocks they never saw."),
+        h("div",{class:"tier"},
+          node(H,"Brain","12 roles, a role every 5 minutes, 24x7",null),
+          node(H,"ML model","ridge + regime terms, versioned, live ranking, scoreboard",null),
+          node(H,"Deep-learning trainer","autodiff, 34 indicators, residual net + Transformer, evolutionary search 24x7",null),
+          node(H,"Model steward","re-scores, watches the live IC, switches the model off when it fails",null))),
+      h("div",{class:"flow"},"▼ test requests and ideas"),
+      h("div",{class:"tierlabel"},"Code: the judge (never a model)"),
+      h("div",{class:"tier"},
+        node(K,"Improve loop","walk-forward backtests 24/7",null),
+        node(K,"Verdicts","unseen blocks, cuts A + B, full validation",null),
+        node(K,"Honesty checks","number gate, security guard",null),
+        node(K,"SPY bot","paper trading (SIMULATE), 5h candles",null))));
+}
+// Sections are grouped so the page reads top-down: the essentials open, the detail folded (open state kept across refreshes).
+const PRIMARY=["The team","Live strategy and promotions","Paper trading","The ML model","Deep-learning trainer","AI agents","Backtest charts","Strategy experiment winners","Candle size","Why runs win or lose","Research ideas"];
+const GROUPS=[["The brain: roles, notes, requests, reward, security",["Learning ledger","The brain's roles","Agent notes","Test requests and reports","Agent reward","Security guard"]],
+  ["Data, tests and system",["Real data in","Strategy tests","Fine-tuning","Scheduler activity","System"]]];
+const openGroups=new Set();
+function arrange(app){
+  const secs=[];let cur=null;
+  for(const el of [...app.children]){if(el.tagName==="H2"){cur={title:el.textContent,els:[el]};secs.push(cur);}else if(cur)cur.els.push(el);}
+  const pick=prefixes=>secs.filter(x=>prefixes.some(p=>x.title.startsWith(p)));
+  const out=h("div");
+  for(const p of PRIMARY)for(const x of pick([p]))out.append(...x.els);
+  const used=new Set([...PRIMARY.flatMap(p=>pick([p])),...GROUPS.flatMap(g=>pick(g[1]))]);
+  for(const [name,prefixes] of GROUPS){
+    const g=h("details",{class:"group"},h("summary",null,name));if(openGroups.has(name))g.open=true;
+    g.addEventListener("toggle",()=>{g.open?openGroups.add(name):openGroups.delete(name);});
+    for(const x of pick(prefixes))g.append(...x.els);out.append(g);}
+  for(const x of secs)if(!used.has(x))out.append(...x.els);  // a new section is never hidden by accident
+  return out;
+}
+function render(d){
+  const now=d.generated;
+  $("#meta").textContent="updated "+new Date(now*1000).toLocaleTimeString()+" · refreshes every 15 s, reloads itself after a dashboard update · read-only · lab "+d.version+" ("+d.mode+")";
+  const st=$("#status");st.className="pill "+d.status.level;st.replaceChildren(h("i"),h("span",null,{ok:"Running",attention:"Needs attention",stopped:"Stopped (kill switch)"}[d.status.level]||d.status.level));
+  $("#alerts").replaceChildren(...d.alerts.map(a=>h("div",{class:"card",style:"margin-bottom:8px;border-color:var(--warn)"},h("span",{class:"badge attention"},"alert")," ",a)));
+  const hl=d.health,inp=d.inputs;
+  // FLASHING ALERT: a considerably better strategy, decided by code only (strategy::considerably_better): validated on both block
+  // cuts, measured on the same candles as the current strategy, unseen-block return at least +1.0 point per block above it on both
+  // cuts, trade win rate not lower, positive on the noisy tape.
+  // only a variant that also passed the FULL validation (every block offset) flashes; it goes live at the next market close
+  const ps=inp.promotion_status||{qualifying:[],not:[]},qset=new Set(ps.qualifying||[]);
+  const btAll=inp.better||[],bt=btAll.filter(x=>qset.has(x.interval+"|"+x.tokens)),bp=(inp.better_pending||[]).concat(ps.not||[]);
+  const liveNow=(inp.promotions||[]).find(p=>p.status==="live");
+  $("#better").replaceChildren(...bt.map(x=>h("div",{class:"banner",role:"alert"},h("b",null,"BETTER STRATEGY PASSED THE FULL VALIDATION: "+x.interval+" | "+x.tokens+" — goes live at the next market close (Claude Code applies it in code)"),
+      h("div",{class:"sub",style:"margin-top:4px"},x.cuts.map(c=>"cut "+c.cut+": unseen blocks "+sgn(c.holdout,2)+"% per block vs current "+sgn(c.baseline_holdout,2)+"% ("+sgn(c.gain,2)+" pts), win rate "+fmt(c.win,0)+"% vs "+fmt(c.baseline_win,0)+"%, noisy "+sgn(c.noisy,2)+"%, worst block "+sgn(c.worst,1)+"% vs "+sgn(c.baseline_worst,1)+"%").join(" · ")+". Not live yet: it reaches the bot only through a reviewed, tested code change."))),
+    ...(liveNow?[h("div",{class:"quiet"},"Live strategy now: plain + "+liveNow.variant+" (found by "+liveNow.source+"; "+liveNow.detail+")")]:[]),
+    ...(bp.length?[h("div",{class:"quiet"},"Considerably better on cuts A and B but not (yet) eligible to go live: "+bp.join(" · "))]:[]));
+  const app=h("div");
+  // data freshness: every source with its age (green current, red overdue); the page itself re-reads every 15 s
+  const fr=d.freshness||[];
+  $("#fresh").replaceChildren(...fr.map(f=>h("span",{class:"badge "+(f.overdue?"bad":"ok"),style:"margin:0 6px 6px 0",title:"updated "+(f.ts?new Date(f.ts*1000).toLocaleString():"never")+"; expected at least every "+Math.round(f.max/60)+" min"},
+    f.name+" · "+(f.age==null?"never":ago(now-f.age,now)))));
+  app.append(h("h2",null,"The team: Claude Code supervisors, the lab's own models and code"),orgChart(d.team,d.health,now));
+  // AI AGENTS FIRST: what the brain proposed and what the code found on blocks no agent saw
+  const ar=inp.agent_results||{},as=ar.summary||[],rr=ar.rows||[],cap=ar.capital||5000;
+  const kindPill=k=>pill(k.startsWith("Brain")?"ok":"mute",k);
+  const stPill=st=>pill(st==="validated"?"ok":st==="candidate"?"info":st==="failed-alt-cut"?"attention":"bad",st||"—");
+  const vs=(x,b,d=2)=>x==null?"—":h("span",null,h("b",{class:x>(b==null?0:b)?"pos":"neg"},sgn(x,d)),b==null?"":h("span",{class:"sub"}," vs "+sgn(b,d)));
+  const sumKind=k=>as.filter(x=>x.kind===k).reduce((a,x)=>({p:a.p+(x.proposed||0),t:a.t+x.tested,v:a.v+x.validated,c:a.c+x.candidate}),{p:0,t:0,v:0,c:0});
+  const tot=sumKind("Brain (own models)");
+  app.append(h("h2",null,"AI agents: what the lab's own models proposed, judged by code on blocks nobody saw"));
+  app.append(card(null,
+    h("div",{class:"grid kpis",style:"margin-bottom:10px"},
+      h("div",{class:"card kpi"},h("div",{class:"v"},fmt(tot.t,0)),h("div",{class:"l"},"tests proposed by the lab's own models, finished"),h("div",{class:"n"},fmt(tot.p,0)+" proposed so far (a study takes about an hour)")),
+      h("div",{class:"card kpi"},h("div",{class:"v"},fmt(tot.v,0)),h("div",{class:"l"},"validated (both block cuts)"),h("div",{class:"n"},fmt(tot.c,0)+" more passed cut A only")),
+      h("div",{class:"card kpi"},h("div",{class:"v"},fmt(as.filter(x=>x.kind==="code").reduce((a,x)=>a+x.validated,0),0)),h("div",{class:"l"},"validated from code paths"),h("div",{class:"n"},"planner / sweeps, for comparison"))),
+    h("div",{class:"sub",style:"margin-bottom:8px"},"Every variant the agents proposed is backtested on 2026 walk-forward 14-session blocks and judged by code on the half of the blocks no agent saw, against the current strategy (same blocks). Returns are % per 14-session block; USD at the "+fmt(cap,0)+" USD account. The agents never see these unseen-block numbers."),
+    as.length?table(["agent","type","proposed","tested","validated","cut A only","failed cut B","failed","avg vs current (cut A, pts)","best result on unseen blocks (cut A vs current)"],
+      as.map(x=>[h("b",null,x.source),kindPill(x.kind),fmt(x.proposed,0),fmt(x.tested,0),x.validated?pill("ok",fmt(x.validated,0)):"0",fmt(x.candidate,0),fmt(x.failed_alt_cut,0),fmt(x.failed,0),
+        x.avg_gain_a==null?"—":h("b",{class:x.avg_gain_a>0?"pos":"neg"},sgn(x.avg_gain_a,2)),
+        x.best?h("span",null,x.best.variant+" ",vs(x.best.holdout_a,x.best.base_a)," ",stPill(x.best.status)):"—"]),[2,3,4,5,6,7,8]):h("div",{class:"empty"},"no agent proposals recorded yet")));
+  // Charts: the best AI runs block by block, the agents compared, their reward over time, their activity
+  if(!(inp.best_ai||[]).some(r=>String(r.source).startsWith("brain-")))app.append(card("Best run proposed by the lab's own models (the brain)",h("div",{class:"empty"},"No test the brain requested has finished yet (it has proposed "+fmt(tot.p,0)+", each study takes about an hour). It will appear here, block by block, as soon as one finishes. The retired agents' best runs below are history for comparison.")));
+  (inp.best_ai||[]).forEach(run=>{
+    const last=run.blocks.length?run.blocks[run.blocks.length-1]:null,cap=run.capital||5000;
+    app.append(card(run.title+": "+run.variant+" — proposed by "+run.source+" — "+run.status,
+      h("div",{class:"sub",style:"margin-bottom:6px"},(run.why?"Why (the agent's words): "+run.why+". ":"")+"Unseen blocks (cut A): ",h("b",{class:(run.holdout_a??0)>(run.base_a??0)?"pos":"neg"},sgn(run.holdout_a,2)+"%/block")," vs current "+sgn(run.base_a,2)+"%; cut B: "+sgn(run.holdout_b,2)+"% vs "+sgn(run.base_b,2)+"%; trade win rate "+fmt(run.win_a,0)+"% vs "+fmt(run.base_win_a,0)+"%."),
+      blockBars(run),
+      h("div",{class:"sub",style:"margin:4px 0 8px"},"Each bar = one 14-session block of 2026 (green up = gain, red down = loss, grey = no trade); dark tick = the current strategy on the same block. Settings are searched on the sessions before each block, then held fixed."),
+      (()=>{const ch=run.blocks.filter(x=>x.chain),t0=ch.length?ch[0].start:0;
+        // each point = the account after that block closed (start + 14 sessions ~ 20 days); the line starts at the deposit
+        return lines([{name:run.variant,color:"#1a7f37",points:[[t0,cap],...ch.map(x=>[x.start+20*86400,x.equity])]},
+          {name:"current strategy",color:"#8c959f",points:[[t0,cap],...ch.filter(x=>x.base!=null).map(x=>[x.start+20*86400,x.base_equity])]}],{yFmt:v=>fmt(v,0)+" USD",zero:cap});})(),
+      h("div",{class:"sub"},"One "+fmt(cap,0)+" USD account compounded over consecutive, non-overlapping blocks (green = this variant, grey = current strategy)"+(last?": "+fmt(last.equity,0)+" vs "+fmt(last.base_equity,0)+" USD":"")+". The bars above include all three overlapping offsets of cut A, which is what the code judges.")));
+  });
+  const cmp=as.filter(x=>x.tested>0);
+  // owner 2026-10-11 (screenshot of this chart): the average alone misled: show the counts, the validated ideas and the best idea
+  const lbl=x=>x.source;
+  const gain=b=>b&&b.holdout_a!=null&&b.base_a!=null?b.holdout_a-b.base_a:null;
+  app.append(card("Agents compared: gain over the current strategy on unseen blocks (cut A, points per block)",
+    hbars(cmp.map(x=>({label:lbl(x),value:x.avg_gain_a,note:x.tested+" tested, "+x.validated+" validated, "+x.candidate+" passed cut A only"}))),
+    h("div",{class:"sub",style:"margin:4px 0 10px"},"Bars: the AVERAGE over every idea the agent had tested. Most ideas fail (that is normal research), so averages sit below zero; what counts is whether an idea is validated (both cuts) and how good the best one is (table). Averages over a handful of tests are noisy."),
+    table(["agent","tested","validated","passed cut A only","failed on cut B","average gain","best idea","best gain","why the best idea is not live"],
+      cmp.map(x=>{const g=gain(x.best);return [lbl(x),String(x.tested),String(x.validated),String(x.candidate),String(x.failed_alt_cut),
+        x.avg_gain_a==null?"—":sgn(x.avg_gain_a,2)+" pts"+(x.tested<5?" (only "+x.tested+" tests)":""),
+        x.best?x.best.variant+" ("+x.best.status+")":"—",g==null?"—":sgn(g,2)+" pts",
+        x.best?(x.best.status==="validated"?"validated, but not considerably better or not fully validated (see Live strategy)":(x.best.verdict||x.best.status)):"—"];}),[1,2,3,4,5,7])));
+  // Quant review (code): paired per-block evidence, multiple testing, risk-adjusted results, overfitting decay (unseen half)
+  const qr=(inp.quant||"").split("\n").filter(x=>x.trim());
+  if(qr.length){const v=qr.find(x=>x.includes("VERDICT"))||"",dec=inp.quant_decay||[];
+    app.append(card("Quant review: are the gains real, and worth the risk? (computed by code on the unseen half; agents only see the training half)",
+      h("div",{style:"font-weight:600;margin-bottom:8px;color:"+(v.includes("no variant")?"#cf222e":"#1a7f37")},v.trim()),
+      h("pre",{style:"white-space:pre-wrap;font-size:12px;margin:0 0 8px"},qr.filter(x=>!x.includes("VERDICT")).join("\n")),
+      dec.length?h("div",null,h("div",{class:"sub",style:"margin-bottom:4px"},"Overfitting check: mean paired gain per option on the training half vs the unseen half (a gain that vanishes on unseen blocks was fitted to noise)"),
+        hbars(dec.map(d=>({label:d.option+" ("+d.variants+")",value:d.unseen,note:"training "+sgn(d.train,2)+" -> unseen "+sgn(d.unseen,2)})))):null));}
+  // Entry gating: does it need improving? (code; owner 2026-10-11) verdict first, then the evidence per gate and finding
+  const eg=(inp.entry_gating||"").split("\n").filter(x=>x.trim());
+  if(eg.length){const v=eg.find(x=>x.startsWith("VERDICT"))||"";
+    app.append(card("Entry gating: does it need improving? (computed by code; the planner tests confirmed findings first)",
+      h("div",{style:"font-weight:600;margin-bottom:8px;color:"+(v.includes("NEEDS")?"#cf222e":"#1a7f37")},v),
+      h("pre",{style:"white-space:pre-wrap;font-size:12px;margin:0"},eg.filter(x=>!x.startsWith("VERDICT")).join("\n"))));}
+  app.append(card("Newest agent proposals and their results (unseen blocks; current strategy in grey)",
+    rr.length?table(["when","agent","variant","why (the agent's words)","result","cut A %/block","USD/block (cut A)","cut B %/block","win rate (cut A)","trades/block","the code's reason"],
+      rr.map(x=>[ago(x.ts,now),h("span",null,x.source," ",kindPill(x.kind)),h("b",null,x.variant),h("span",{class:"sub"},(x.why||"—").slice(0,160)),stPill(x.status),
+        vs(x.holdout_a,x.base_a),vs(x.usd_a,x.base_usd_a,0),vs(x.holdout_b,x.base_b),x.win_a==null?"—":h("span",null,fmt(x.win_a,0)+"%",h("span",{class:"sub"}," vs "+fmt(x.base_win_a,0)+"%")),
+        fmt(x.trades,1),h("span",{class:"sub"},x.verdict||"")]),[5,6,7,8,9]):h("div",{class:"empty"},"no tested agent proposals yet")));
+  app.append(h("h2",null,"Backtest charts: holdout comparison, win rate, per-block returns, equity and drawdown"));
+  backtestCharts(inp).forEach(c=>app.append(c));
+  // Inputs
+  // ---- the lab's own models, its learning, and the paper account (inp.ai, built from files and the databases)
+  {
+    const ai=inp.ai||{},tms=ms=>ms?new Date(ms).toISOString().replace("T"," ").slice(0,16)+" UTC":"—",pct=x=>x==null?"—":(x>=0?"+":"")+fmt(x,2)+"%",num=(x,d=4)=>x==null?"—":(x>=0?"+":"")+Number(x).toFixed(d);
+    const spark=(vals,w=520,hh=70)=>{if(!vals||vals.length<2)return h("div",{class:"empty"},"not enough points yet");const ns="http://www.w3.org/2000/svg",svg=document.createElementNS(ns,"svg");svg.setAttribute("viewBox",`0 0 ${w} ${hh}`);svg.setAttribute("width","100%");
+      const mn=Math.min(...vals),mx=Math.max(...vals),span=Math.max(mx-mn,1e-9),pts=vals.map((v,i)=>`${(i/(vals.length-1))*(w-4)+2},${hh-6-((v-mn)/span)*(hh-12)}`).join(" ");
+      const pl=document.createElementNS(ns,"polyline");pl.setAttribute("points",pts);pl.setAttribute("fill","none");pl.setAttribute("stroke","var(--info,#0969da)");pl.setAttribute("stroke-width","2");svg.append(pl);return svg;};
+    const kv=(k,v)=>h("div",{class:"kpi"},h("div",{class:"k"},k),h("div",{class:"v"},v));
+    // PAPER TRADING
+    app.append(h("h2",null,"Paper trading: account, positions, trades and the bot's latest decision"));
+    const pp=ai.paper;
+    if(!pp||!pp.account){app.append(card(null,h("div",{class:"empty"},"no paper record yet")));}
+    else{const a=pp.account,ret=a.start?((a.equity/a.start)-1)*100:null,winr=a.closed_trades?a.wins/a.closed_trades*100:null;
+      const pos=Array.isArray(a.positions)?a.positions:[];
+      app.append(card(null,
+        h("div",{class:"grid kpis",style:"margin-bottom:10px"},kv("equity (USD)",fmt(a.equity,2)),kv("since start",pct(ret)),kv("realised",fmt(a.realized,2)),kv("open P&L",fmt(a.open_pnl,2)),kv("max drawdown",fmt(a.max_drawdown_pct,2)+"%"),kv("open positions",fmt(a.open_positions,0)),kv("closed trades",fmt(a.closed_trades,0)),kv("win rate",winr==null?"no closed trade yet":fmt(winr,0)+"%")),
+        h("div",{class:"sub"},"Equity curve (this account size), last "+(pp.curve||[]).length+" points; latest record "+tms(a.ts_ms)),
+        spark(((pp.curve||[]).slice().reverse()).map(x=>x[1])),
+        h("div",{class:"sub",style:"margin:10px 0 4px;font-weight:600"},"Open positions"),
+        pos.length?table(Object.keys(pos[0]||{}),pos.map(p=>Object.values(p).map(v=>typeof v==="object"?JSON.stringify(v):String(v))),[]):h("div",{class:"empty"},"no open position"),
+        h("div",{class:"sub",style:"margin:10px 0 4px;font-weight:600"},"Closed paper trades (newest first)"),
+        (pp.trades||[]).length?table(["symbol","side","entered","exited","entry","exit","qty","P&L (USD)","fees","reason"],pp.trades.map(t=>[t.symbol,t.side,tms(t.entry_ms),t.exit_ms>0?tms(t.exit_ms):"open",fmt(t.entry,2),fmt(t.exit,2),fmt(t.qty,0),fmt(t.pnl,2),fmt(t.fees,2),h("span",{class:"sub"},t.reason)]),[4,5,6,7,8]):h("div",{class:"empty"},"no closed paper trade yet: the account was opened a few days ago and the strategy enters on signals"),
+        (pp.pending||[]).length?h("div",{class:"sub",style:"margin:10px 0 4px"},"Pending decision, saved on disk: "+pp.pending.map(x=>String(x.side).toLowerCase()+" "+x.symbol).join(", ")+". It fills at the open of the candle after the next one, in the regular session (09:30 or 14:30 ET); a new search result does not cancel it, a restart keeps it."):null,
+        pp.decision?h("div",null,h("div",{class:"sub",style:"margin:10px 0 4px;font-weight:600"},"The bot's latest decision ("+tms(pp.decision.ts_ms)+", trigger "+(pp.decision.trigger||"?")+"; "+(pp.decision.note||"")+"; slot budget "+fmt(pp.decision.slot_budget,0)+" USD; "+fmt(pp.decision.rejected,0)+" candidates rejected)"),
+          table(["symbol","rank","signal","outcome"],(pp.decision.candidates||[]).map(c=>[c.symbol,fmt(c.rank,0),fmt(c.signal,1),h("span",{class:"sub"},c.outcome)]),[1,2]),
+          h("div",{class:"sub"},"Gates: "+JSON.stringify(pp.decision.gates||{}))):null));}
+    // THE ML MODEL
+    app.append(h("h2",null,"The ML model: versions, calibration, the live ranking and its own scoreboard"));
+    const md=ai.model;
+    app.append(card(null,
+      md?h("div",null,h("div",{class:"grid kpis",style:"margin-bottom:10px"},kv("current version","v"+md.version),kv("features",fmt(md.features,0)),kv("training",md.scheme),kv("held-out IC",num(md.heldout_ic)),kv("ML gate",ai.gate_off?pill("bad","OFF (steward switch)"):pill("ok","on"))),
+        h("div",{class:"sub"},(ai.model_card&&ai.model_card.text)||""),
+        h("div",{class:"sub",style:"margin-top:6px"},"Steward: "+((ai.ic_reading&&ai.ic_reading.text)||"no reading yet")+(ai.ic_reading?" ("+ago(ai.ic_reading.ts,now)+")":"")),
+        h("div",{class:"sub"},"Live ranking: "+((ai.live_ranking&&ai.live_ranking.text)||"—")),
+        h("div",{class:"sub"},"Its own record, every live call scored against the real outcome: "+((ai.scoreboard&&ai.scoreboard.text)||"—")),
+        h("div",{class:"sub",style:"margin:10px 0 4px;font-weight:600"},"The live record over time: the realised excess return (bps) of the top and bottom quarter of the model's calls, per day"),
+        liveRecordChart(ai.scorehist),
+        h("div",{class:"sub",style:"margin:10px 0 4px;font-weight:600"},"Volatility forecast vs realised (SPY, % over the next session, out of sample, per day)"),
+        volChart(ai.vol_track),
+        h("div",{class:"sub",style:"margin:10px 0 4px;font-weight:600"},"Calibration (out of sample): what a stock at each percentile of the bot's top 20 really earned over the next session"),
+        calibrationChart(md),
+        table(["percentile","expected excess (bps)","hit rate","n"],(md.calibration||[]).map(b=>[fmt(b.pct_lo,0)+"-"+fmt(b.pct_hi,0),(b.mean_bps>=0?"+":"")+fmt(b.mean_bps,1),fmt(b.hit*100,0)+"%",fmt(b.n,0)]),[1,2,3]),
+        h("div",{class:"sub",style:"margin:10px 0 4px;font-weight:600"},"Versions (a new one every session of new data; the live column is each version's real out-of-sample IC after its training end)"),
+        versionsChart(ai.versions),
+        table(["version","created","trained through","samples","held-out IC","live IC (se)","sessions"],(ai.versions||[]).map(v=>["v"+v.version,ago(v.created,now),tms(v.trained_through_ms),fmt(v.samples,0),num(v.heldout_ic),v.live_ic==null?"—":num(v.live_ic)+" ("+fmt(v.live_se,4)+")",v.live_sessions==null?"—":fmt(v.live_sessions,0)]),[3,4,5,6]),
+        ai.candle_ml?h("details",null,h("summary",null,"The standalone candle-ML verdict: fee-inclusive walk-forward (parameters re-chosen before every 14-session block), the improvement experiments, and the forward test"),h("pre",{style:"white-space:pre-wrap;font-size:12px"},ai.candle_ml+"\n\n"+(ai.candle_improve||""))):null,
+        ai.briefing?h("details",null,h("summary",null,"The trading briefing (regime, risk forecast, take-or-skip per signal after costs, the model as a filter on the bot's real entries)"),h("pre",{style:"white-space:pre-wrap;font-size:12px"},ai.briefing)):null)
+        :h("div",{class:"empty"},"no model trained yet")));
+    // THE DEEP-LEARNING TRAINER
+    app.append(h("h2",null,"Deep-learning trainer (24x7): the evolutionary search for better networks"));
+    const tc={};(ai.trainer_counts||[]).forEach(x=>tc[x.a]=x.b);const champ=(ai.genomes||[]).find(g=>g.h===1);
+    app.append(card(null,
+      h("div",{class:"grid kpis",style:"margin-bottom:10px"},kv("genomes tried",fmt((tc.done||0)+(tc.pending||0)+(tc.skipped||0),0)),kv("evaluated",fmt(tc.done||0,0)),kv("champion",champ?pill("ok","yes"):pill("mute","none yet")),kv("champion bag",fmt(ai.bag||0,0)+" of 7")),
+      h("div",{class:"sub",style:"margin-bottom:6px"},"A genome is an architecture plus its training recipe (residual network or Transformer over the last bars of candles and indicators). Each is trained and tested on three real out-of-sample windows and compared with the ridge, paired and widened for the number of trials. It becomes champion only if its gain is above zero at that level; the champion is re-tested every hour and demoted when it stops winning. Nothing has beaten the ridge so far unless a champion shows below."),
+      h("div",{class:"sub",style:"margin:6px 0 4px;font-weight:600"},"Fitness over generations: each dot is one network in the order it was tried, its gain over the ridge model (paired, out of sample) with its interval; green = interval above zero, ring = champion; blue = residual net, purple = Transformer"),
+      errPoints((ai.fitness||[]).map(g=>({id:g.id,kind:g.kind,v:g.d,lo:g.d_lo,hi:g.d_hi,hl:g.champion}))),
+      h("div",{class:"sub",style:"margin:6px 0 4px;font-weight:600"},"Population: networks tried per kind, and their mean gain over the ridge (points of IC)"),
+      colBars(["ResNet","Transformer"].map(k=>{const g=(ai.fitness||[]).filter(x=>x.kind===k&&x.d!=null);return {label:k+" ("+g.length+")",v:g.length?g.reduce((a,x)=>a+x.d,0)/g.length:null,note:g.length+" evaluated"};}),{d:3,hgt:110}),
+      table(["genome","IC","IC low","IC high","paired vs ridge","paired low","paired high","champion"],(ai.genomes||[]).map(g=>[g.a,num(g.b),num(g.c),num(g.d),num(g.e),num(g.f),num(g.g),g.h===1?pill("ok","champion"):""]),[1,2,3,4,5,6]),
+      h("details",null,h("summary",null,"Trainer log (newest first)"),h("pre",{style:"white-space:pre-wrap;font-size:12px"},(ai.trainer_log||[]).join("\n")))));
+    // THE LEARNING LEDGER
+    app.append(h("h2",null,"Learning ledger: every trial the lab ran and what was adopted"));
+    app.append(card(null,h("div",{class:"sub",style:"margin-bottom:6px"},"Each model, feature, training scheme and network is a trial. Every interval is widened for the number of trials, and a change is adopted only if its paired gain over what it modifies is above zero at that level."),
+      table(["family","trials","adopted"],(ai.ledger||[]).map(x=>[x.a,fmt(x.b,0),fmt(x.c,0)]),[1,2]),
+      (ai.ledger_adopted||[]).length?table(["adopted","value","low","high"],ai.ledger_adopted.map(x=>[x.a,num(x.b),num(x.c),num(x.d)]),[1,2,3]):h("div",{class:"empty"},"nothing adopted yet: no change has passed the strict test")));
+    // THE BRAIN'S ROLES
+    app.append(h("h2",null,"The brain's roles: latest run of each (a role every 5 minutes, day and night)"));
+    app.append(card(null,table(["role","latest run"],(ai.roles||[]).map(r=>[r.role,h("span",{class:"sub"},r.line||"not run yet")]),[])));
+  }
+  app.append(h("h2",null,"Real data in"));
+  const pop=inp.backtest.by_population;
+  const paper=inp.paper;
+  app.append(h("div",{class:"grid two"},
+    card("Bot backtest archive",
+      table(["population","selection","start capital","runs","trades","PnL (USD)","mean run return","mean / trade","win rate"],pop.map(r=>[r.role,r.selection,r.capital==null?"—":fmt(r.capital,0),fmt(r.runs,0),fmt(r.trades,0),usd(r.pnl),r.mean_run_return_pct==null?"—":sgn(r.mean_run_return_pct,2)+"%",sgn(r.mean_ret),r.win_rate==null?"—":fmt(r.win_rate*100,0)+"%"]),[2,3,4,5,6,7,8]),
+      h("div",{class:"sub",style:"margin-top:8px"},"Each run trades one 14-session block from its start capital. PnL = sum of the closed trades' net PnL over all runs of that group (fees included); mean run return = average return of one run. selected = trades kept only for runs that passed the bot's filter; none = unselected sample.")),
+    card("Paper record (forward data)",
+      h("div",{class:"row"},h("b",null,"state"),pill({empty:"mute",thin:"attention",usable:"info",rich:"ok"}[paper.state]||"mute",paper.state)),
+      h("div",{class:"row"},"closed trades",h("b",null,fmt(paper.trades,0))),
+      paper.trades?h("div",{class:"row"},"win rate (60%+ = winning)",h("b",{class:paper.wins/paper.trades>=0.6?"ok":""},fmt(paper.wins/paper.trades*100,0)+"%")):null,h("div",{class:"row"},"days / run segments",h("b",null,paper.days+" / "+paper.runs)),
+      paper.equity?h("div",{class:"row"},"latest equity",h("b",null,fmt(paper.equity.equity,2)+" "+(paper.currency||"USD")+" ("+sgn(paper.equity.index-100,2)+"%)")):null,
+      paper.latest_search?h("div",{class:"row"},"latest search",h("b",null,paper.latest_search)):null,
+      paper.last_decision?h("div",{class:"row"},"last decision ("+ago(paper.last_decision.ts,now)+")",h("b",null,(paper.last_decision.note||"—")+(paper.last_decision.funded!=null?" · "+paper.last_decision.funded+" of "+(paper.last_decision.requested??"?")+" slots funded":""))):h("div",{class:"row"},"last decision",h("b",null,"none recorded yet")),
+      h("div",{class:"sub",style:"margin-top:6px"},paper.stale?"record is stale: the bot may be stopped":"newest row "+ago(paper.last_ts,now)))));
+  app.append(h("div",{class:"grid two",style:"margin-top:12px"},
+    card("Windows (weekly blocks by entry time)",
+      inp.backtest.windows.length?table(["window","status","trades","PnL (USD, all capitals)","win rate","unique entries","trading days"],inp.backtest.windows.map(w=>[w.label,pill(w.complete?"ok":"attention",w.complete?"complete":"provisional"),fmt(w.trades,0),usd(w.pnl),w.win_rate==null?"—":fmt(w.win_rate*100,0)+"%",fmt(w.unique_entries,0),fmt(w.days,0)]),[2,3,4,5,6]):h("div",{class:"empty"},"no window has 50 trades yet")),
+    card("Bot strategy PnL per day: one "+(inp.backtest.pnl_capital==null?"—":fmt(inp.backtest.pnl_capital,0))+" USD account, unseen sessions"+(inp.backtest.per_day.length?" ("+inp.backtest.per_day[0].day+" to "+inp.backtest.per_day[inp.backtest.per_day.length-1].day+")":""),
+      pnlBars(inp.backtest.per_day.map(x=>({label:x.day.slice(5),pnl:x.pnl,pct:x.pct,trades:x.trades,wins:x.wins,losses:x.losses,runs:x.runs,none:x.no_trades}))),
+      h("div",{class:"sub",style:"margin-top:6px"},"Green up = winning day, red down = losing day. The bot's own process (settings searched on earlier sessions, then traded forward unchanged), PnL counted on the day each trade closed, fees included. Several runs cover each day (block cuts, seeds): the bar is their average, i.e. the expected % of one account; USD = that % of the account. Grey flat bar = trading day with no closed trade (0 USD)."))));
+  // Winners out of the strategy experiments
+  const lb=inp.leaderboard||[];
+  const nW=lb.filter(x=>x.status==="validated").length,nC=lb.filter(x=>x.status==="candidate").length;
+  app.append(h("h2",null,"Strategy experiment winners"));
+  const cell=(x,b)=>x?sgn(x.h2,2)+"%"+(b?" (base "+sgn(b.h2,2)+")":""):"—";
+  const wins=(x)=>x&&x.win2!=null?fmt(x.win2,0)+"%":"—";
+  const wrb=(x,b)=>wins(x)+(b&&b.win2!=null?" (base "+fmt(b.win2,0)+"%)":"");
+  app.append(card(null,h("div",{class:"sub",style:"margin-bottom:8px"},nW+" validated (passed both block cuts), "+nC+" candidates (passed cut A, cut B pending). A winner must: make money in both halves, beat the baseline on the unseen half, keep 40%+ of blocks positive, never lose more than 8% in a block, trade 2+ times per block, stay positive with noisy prices and 1.5x costs, and not lower the trade win rate. Unseen-half (holdout) figures per 14-session block."),
+    lb.length?table(["status","variant","interval","capital","holdout A (baseline)","holdout B (baseline)","total A","win rate A / B (baseline)","worst A","why not (if failed)"],
+      lb.map(x=>[pill(x.status==="validated"?"ok":x.status==="candidate"?"info":"mute",x.status),x.tokens,x.interval,fmt(x.capital,0),cell(x.a,x.baseline_a),cell(x.b,x.baseline_b),
+        x.a&&x.a.chained!=null?sgn(x.a.chained,1)+"%":"—",wrb(x.a,x.baseline_a)+" / "+wrb(x.b,x.baseline_b),x.a?sgn(x.a.worst,1)+"%":"—",
+        h("span",{class:"sub"},x.status==="validated"||x.status==="candidate"?"":(x.verdict_b&&x.status==="failed-alt-cut"?"cut B: "+x.verdict_b:x.verdict_a||""))]),[3,4,5,6,7,8]):h("div",{class:"empty"},"no experiment yet")));
+  // Current strategy on every candle size (the interval sweep) and the tuning team's ranges vs the current strategy
+  const it=inp.intervals||[],tu=inp.tuning||[];
+  const ivPct=(x,k)=>x&&x[k]!=null?sgn(x[k],2)+"%":"—",ivWr=x=>x&&x.win2!=null?fmt(x.win2,0)+"%":"—";
+  app.append(h("h2",null,"Candle size: which aggregation of 15-minute bars makes the current strategy most profitable"));
+  app.append(card(null,h("div",{class:"sub",style:"margin-bottom:8px"},"The current strategy (baseline) tested on every candle size built from the 15-minute bars, 2026 walk-forward blocks, ranked by the unseen half of cut A. Re-measured daily. Live trades 5h."),
+    table(["interval","holdout A","total A","win rate A","worst A","blocks + A","holdout B","total B","win rate B","measured"],
+      it.map(x=>[h("b",null,x.interval+(x.live?" (live)":"")),ivPct(x.a,"h2"),ivPct(x.a,"chained"),ivWr(x.a),ivPct(x.a,"worst"),x.a?fmt(x.a.pos,0)+"%":"—",ivPct(x.b,"h2"),ivPct(x.b,"chained"),ivWr(x.b),x.a?ago(x.a.ts,now):"queued"]),[1,2,3,4,5,6,7,8])));
+  app.append(h("h2",null,"Fine-tuning: current strategy vs the tuning team's ranges"));
+  app.append(card(null,h("div",{class:"sub",style:"margin-bottom:8px"},"The tuner agent proposes search ranges (entry trend margin, DCA depth) from the settings of the most profitable runs on the training blocks; the critic reviews; code tests each range on unseen blocks against the current strategy. Exits are never tuned."),
+    tu.length?table(["status","tuned ranges","interval","holdout A (current)","holdout B (current)","total A","win rate A (current)","worst A","why not (if failed)"],
+      tu.map(x=>[pill(x.status==="validated"?"ok":x.status==="candidate"?"info":"mute",x.status),x.tokens,x.interval,cell(x.a,x.baseline_a),cell(x.b,x.baseline_b),x.a&&x.a.chained!=null?sgn(x.a.chained,1)+"%":"—",wrb(x.a,x.baseline_a),x.a?sgn(x.a.worst,1)+"%":"—",
+        h("span",{class:"sub"},x.status==="validated"||x.status==="candidate"?"":(x.verdict_b&&x.status==="failed-alt-cut"?"cut B: "+x.verdict_b:x.verdict_a||""))]),[3,4,5,6,7]):h("div",{class:"empty"},"no tuned range tested yet: the tuner proposes every round")));
+  // Research ideas from published papers: what was found, how it maps to the current strategy, and its test result
+  const ri=inp.research_ideas||[];
+  app.append(h("h2",null,"Research ideas for the current strategy (from papers, tested by the lab)"));
+  app.append(card(null,h("div",{class:"sub",style:"margin-bottom:8px"},"The research scout reads new papers (arXiv, OpenAlex) and keeps only ideas that could improve the bot's current strategy, adapted to our data. Ideas that map to the lab's options are queued and tested automatically on 2026 walk-forward blocks; the status is the same verdict as every experiment. Ideas needing new code are listed for review."),
+    ri.length?table(["status","paper","idea (tailored to our data)","options tested","holdout A (baseline)","win rate A","source"],
+      ri.map(x=>{const r=x.result,a=r&&r.a,b=r&&r.baseline_a;return [pill(x.status==="validated"?"ok":x.status==="candidate"?"info":x.status==="queued for testing"?"attention":"mute",x.status),
+        h("a",{href:x.url,target:"_blank",rel:"noopener"},x.title.slice(0,80)),h("span",{class:"sub"},(x.idea||"—")+(x.new_mechanism?" [needs new code: "+x.new_mechanism+"]":"")),
+        x.variant||"—",a?sgn(a.h2,2)+"%"+(b?" ("+sgn(b.h2,2)+")":""):"—",a&&a.win2!=null?fmt(a.win2,0)+"%"+(b&&b.win2!=null?" ("+fmt(b.win2,0)+"%)":""):"—",x.source]}),[4,5]):h("div",{class:"empty"},"no paper read yet")));
+  // Agents talking to each other
+  const am=inp.agent_messages||[];
+  app.append(h("h2",null,"Agent notes to each other"));
+  app.append(card(null,h("div",{class:"sub",style:"margin-bottom:8px"},"Notes between the roles (what to test next, concerns, hand-offs): the brain's roles and Claude Code write them now; code adds nothing to them. Notes are opinions; only the backtests decide."),
+    am.length?table(["when","from","to","note","read"],am.map(x=>[ago(x.ts,now),x.from,x.to,h("span",{class:"sub"},x.text),x.read?"yes":"not yet"]),[]):h("div",{class:"empty"},"no notes yet")));
+  // the brain's test requests and role reports
+  const hq=inp.test_requests||[],hr=inp.role_reports||[];
+  app.append(h("h2",null,"Test requests and reports"));
+  app.append(card(null,h("div",{class:"sub",style:"margin-bottom:8px"},"Test requests from the lab's own models (the brain, authors brain-*). Code validates and judges every request exactly like any other experiment."),
+    hq.length?table(["when","agent","asked to test","why","status","holdout A (baseline)","win rate A"],hq.map(x=>{const r=x.result,a=r&&r.a,b=r&&r.baseline_a;return [ago(x.ts,now),x.author.replace("brain-",""),x.interval+" | "+x.variant,h("span",{class:"sub"},x.why),
+      pill(x.status==="validated"?"ok":x.status==="candidate"?"info":x.status==="queued"||x.status==="testing"?"attention":"mute",x.status),a?sgn(a.h2,2)+"%"+(b?" ("+sgn(b.h2,2)+")":""):"—",a&&a.win2!=null?fmt(a.win2,0)+"%"+(b&&b.win2!=null?" ("+fmt(b.win2,0)+"%)":""):"—"]}),[5,6]):h("div",{class:"empty"},"no test requests yet"),
+    ...hr.map(r=>h("details",{style:"margin-top:8px"},h("summary",null,"Report "+r.file),h("pre",{style:"white-space:pre-wrap;font-size:12px"},r.text)))));
+  // Live strategy and promotions
+  const pr=inp.promotions||[];
+  app.append(h("h2",null,"Live strategy and promotions"));
+  app.append(card(null,h("div",{class:"sub",style:"margin-bottom:8px"},"Current live strategy: "+(inp.live_regime?"plain + "+inp.live_regime:"the plain strategy (no promoted option)")+". A variant goes live automatically when it is considerably better on cuts A and B AND passes the full validation (at least 4 of the 5 block cuts covering every block offset), whoever found it. The lab writes a request; the bot's promotion job runs a Claude Code session while the US market is closed (never during paper trading) that changes the strategy constant in code with comments (what differs and why), tests, deploys and pushes. The backtester, the paper account and the console's tests then all use the new strategy, and the lab re-measures it as the new baseline."),
+    pr.length?table(["when","variant","found by","status","detail"],pr.map(x=>[ago(x.updated,now),x.variant,x.source,pill(x.status==="live"?"ok":x.status==="requested"?"attention":"bad",x.status),h("span",{class:"sub"},x.detail)]),[]):h("div",{class:"empty"},"no promotion yet")));
+  // Reward scoreboard (code-computed from real outcomes)
+  const sb=inp.scoreboard||[];
+  app.append(h("h2",null,"Agent reward scoreboard (points the brain's roles earned from real outcomes)"));
+  app.append(card(null,h("div",{class:"sub",style:"margin-bottom:8px"},"Computed by code from real test outcomes: +10 validated, +4 candidate, +1 failed only on cut B, -1 failed on unseen blocks, -2 failed with under 3 trades per block, +2 when the training win rate is 60%+, -1 refused or duplicate request, HARD RULE (never invent data or results): -10 for a number the lab never showed (refused at the door, nothing is stored); -5 text refused by the security guard."),
+    sb.length?table(["agent","points","requests","still testing","how it was earned (newest last)"],sb.map(x=>[x.agent,pill(x.points>0?"ok":x.points<0?"bad":"mute",sgn(x.points,0)),fmt(x.requests,0),fmt(x.pending,0),h("span",{class:"sub"},(x.detail||[]).slice(-6).join("; ")||"—")]),[1,2,3]):h("div",{class:"empty"},"no scores yet")));
+  // Security guard: withheld outside text and quarantined skills
+  const se=inp.security||[];
+  app.append(h("h2",null,"Security guard (prompt injection and bad-actor checks)"));
+  app.append(card(null,h("div",{class:"sub",style:"margin-bottom:8px"},"Every paper, note and test request is inspected by code before the brain reads it: instruction overrides, role changes, fake chat or tool markup, requests for secrets or accounts, shell commands, exfiltration, hidden characters, encoded blobs. Flagged text is withheld and logged."),
+    h("div",{class:"sub",style:"margin:6px 0 4px;font-weight:600"},"Texts screened per day (grey) and withheld (red)"),
+    stackBars((inp.security_counts||[]).map(x=>({t:x.day,total:x.scanned,part:x.withheld}))),
+    se.length?table(["when","source","findings","excerpt"],se.map(x=>[ago(x.ts,now),x.source,pill("attention",x.findings),h("span",{class:"sub"},x.excerpt)]),[]):h("div",{class:"empty"},"nothing withheld so far")));
+  // Why runs win or lose (>=60% of closed trades profitable = winner)
+  const wr=inp.winrate||[],ws=inp.winrate_summary;
+  app.append(h("h2",null,"Why runs win or lose (winner = 60%+ of trades profitable)"));
+  app.append(card(null,ws?h("div",{class:"sub",style:"margin-bottom:8px"},fmt(ws.runs,0)+" runs at "+fmt(ws.capital,0)+" USD, "+fmt(ws.blocks,0)+" blocks: winners "+fmt(ws.winner_share_train*100,0)+"% in the earlier "+ws.train_blocks+" blocks, "+fmt(ws.winner_share_test*100,0)+"% in the later "+ws.test_blocks+". Each reason is learned on the earlier blocks and judged only on the later ones (block-resampled interval, false-discovery control)."):null,
+    wr.length?table(["status","reason","kind","good side","winners: good side / other","difference (95%)","AUC early / later"],
+      wr.map(x=>[pill(x.confirmed?"ok":"mute",x.confirmed?"confirmed":"not confirmed"),x.driver.replace(/^setting |^entry |^exit share /,""),x.kind==="exit mix"?"exit mix (how)":x.kind,(x.direction>0?"above ":"at or below ")+fmt(x.split,3),
+        fmt(x.good*100,0)+"% / "+fmt(x.bad*100,0)+"%",sgn(x.delta*100,0)+" pts ("+sgn(x.ci_low*100,0)+" to "+sgn(x.ci_high*100,0)+")",fmt(x.train_auc,2)+" / "+fmt(x.test_auc,2)]),[]):h("div",{class:"empty"},"not analysed yet")));
+  // Strategy tests with PnL
+  const stt=inp.strategy_tests||[];
+  app.append(h("h2",null,"Strategy tests: PnL on 14-session look-forward blocks"));
+  app.append(card(null,stt.length?table(["when","interval","variant","start capital","cut","blocks","total PnL (USD)","total return","mean PnL / block (USD)","mean / block","worst block","blocks +","win rate 1st / 2nd","noisy 1st / 2nd"],
+    stt.map(x=>[ago(x.ts,now),x.interval,x.tokens,fmt(x.capital,0),x.cut,fmt(x.blocks,0),x.chained_pnl==null?"—":usd(x.chained_pnl),x.chained_pct==null?"—":sgn(x.chained_pct,1)+"%",usd(x.mean_pnl),sgn(x.mean_pct,2)+"%",sgn(x.worst_pct,2)+"%",fmt(x.pos,0)+"%",(x.win1==null?"—":fmt(x.win1,0)+"%")+" / "+(x.win2==null?"—":fmt(x.win2,0)+"%"),
+      (x.nh1==null?"—":sgn(x.nh1,2)+"%")+" / "+(x.nh2==null?"—":sgn(x.nh2,2)+"%")]),[3,5,6,7,8,9,10,11,12]):h("div",{class:"empty"},"no strategy test yet"),
+    h("div",{class:"sub",style:"margin-top:8px"},"Settings searched on earlier sessions, then held fixed for each next 14 sessions; fees and costs included. Total = compounded over consecutive blocks of that cut (blank for older runs that did not record it). Noisy = same blocks with jittered prices and costs x1.5.")));
+  // Activity
+  app.append(h("h2",null,"Scheduler activity (newest first)"));
+  const names=[...new Set(d.ticks.slice(0,3).flatMap(t=>t.steps.map(s=>s.name)))];
+  app.append(card(null,d.ticks.length?h("div",null,
+    h("div",{class:"ticks"},d.ticks.map(t=>h("div",{class:"tickrow",title:t.steps.map(s=>s.name+": "+s.detail).join("\n")},h("span",{class:"t"},dt(t.ts)),h("span",{class:"t",style:"width:34px"},t.mode),
+      names.map(n=>{const s=t.steps.find(x=>x.name===n);return h("span",{class:"cell s-"+(s?s.status:"none"),title:n+(s?": "+s.detail:"")});})))),
+    h("div",{class:"legend"},[["ok","var(--ok)"],["skipped","#98a2b3"],["failed","var(--bad)"],["blocked","var(--warn)"]].map(([a,c])=>h("span",{style:"--c:"+c},a)),h("span",{style:"--c:transparent"},"columns: "+names.join(" · ")))):h("div",{class:"empty"},"no tick has run yet")));
+  // Health
+  app.append(h("h2",null,"System"));
+  app.append(h("div",{class:"grid two"},
+    card("Lab",h("div",{class:"row"},"hourly job",pill(hl.schedule_loaded?"ok":"bad",hl.schedule_loaded?"loaded":"not loaded")),...[["the brain (a role every 5 minutes)","the brain"],["deep-learning trainer","deep-learning trainer"]].map(([lab,key])=>{const f=(d.freshness||[]).find(x=>x.name.includes(key));return h("div",{class:"row"},lab,pill(f?(f.overdue?"bad":"ok"):"mute",f?(f.overdue?"stalled":"running"):"unknown"));}),
+      h("div",{class:"row"},"hash chain",pill(hl.chain_problems?"bad":"ok",hl.chain_problems?hl.chain_problems+" problems":"intact")),h("div",{class:"row"},"kill switch",pill(hl.stop?"bad":"ok",hl.stop?"ENGAGED":"off")),
+      h("div",{class:"row"},"data / memory database",h("b",null,fmt(hl.data_mb,1)+" MB / "+fmt(hl.memory_mb,2)+" MB"))),
+    card("Machine and freshness",h("div",{class:"row"},"load (1 min)",h("b",null,fmt(hl.load1,1))),h("div",{class:"row"},"free memory",h("b",null,hl.free_gb==null?"—":fmt(hl.free_gb,1)+" GB")),
+      h("div",{class:"row"},"newest backtest block ends",h("b",null,ago(hl.newest_bar,now))),h("div",{class:"row"},"last archive import",h("b",null,ago(hl.last_import,now))))));
+  $("#app").replaceChildren(arrange(app));
+}
+let failures=0,page=null,restored=false;
+// Fetches a fresh snapshot and renders it; on failure marks the dashboard as unable to reach the lab.
+async function tick(){
+  try{const r=await fetch("/api/snapshot",{cache:"no-store"});if(!r.ok)throw new Error("HTTP "+r.status);const d=await r.json();
+    // the dashboard was updated (new page code): reload once to show it, keeping the scroll position
+    if(page&&d.page&&d.page!==page){try{sessionStorage.setItem("scroll",String(scrollY));}catch(e){}location.reload();return;}
+    // a snapshot the server built more than 2 minutes ago is not current (clock or cache fault): never shown as current
+    if(Math.abs(Date.now()/1000-d.generated)>120)throw new Error("the lab's data is "+Math.round((Date.now()/1000-d.generated)/60)+" min old");
+    page=d.page;render(d);failures=0;
+    if(!restored){restored=true;try{const y=+sessionStorage.getItem("scroll");if(y)scrollTo(0,y);sessionStorage.removeItem("scroll");}catch(e){}}}
+  catch(e){failures++;const st=$("#status");st.className="pill bad";st.replaceChildren(h("i"),h("span",null,"dashboard cannot reach the lab ("+e.message+")"));
+    // owner 2026-10-11: nothing stale is ever presented: after a failed refresh the old numbers are hidden, not shown as current
+    if(failures>=2){const a=$("#app");a.replaceChildren(h("div",{class:"card",style:"padding:24px;text-align:center"},"The lab is not answering, so no data is shown: everything on this page must be current. It reappears as soon as the lab answers ("+e.message+")."));}}
+}
+tick();setInterval(tick,15000);
+// Live logs: the chosen log's newest lines, re-read every 3 s; stays at the bottom unless the reader scrolled up.
+const LOGS=["improve","brain","trainer","tick","supervisor","monitor"];
+let logName=(()=>{try{return localStorage.getItem("log")||"improve";}catch(e){return "improve";}})();
+function logTabs(){$("#logtabs").replaceChildren(...LOGS.map(n=>{const b=h("button",{class:"pill"+(n===logName?"":" mute"),style:"cursor:pointer;border:0"},n);
+  b.onclick=()=>{logName=n;try{localStorage.setItem("log",n);}catch(e){}logTabs();logTick(true);};return b;}));}
+async function logTick(jump){
+  const pre=$("#logtext");const atEnd=jump||pre.scrollTop+pre.clientHeight>=pre.scrollHeight-20;
+  try{const r=await fetch("/api/logs?name="+logName+"&n=200",{cache:"no-store"});const d=await r.json();if(d.error)throw new Error(d.error);
+    pre.textContent=d.lines.join("\n")||"(empty)";$("#logmeta").textContent="· "+d.file.split("/").pop()+" · live, every 3 s · "+new Date().toLocaleTimeString();}
+  catch(e){pre.textContent="log not available: "+e.message;$("#logmeta").textContent="";}
+  if(atEnd)pre.scrollTop=pre.scrollHeight;}
+logTabs();logTick(true);setInterval(logTick,3000);
+</script>
+</body>
+</html>

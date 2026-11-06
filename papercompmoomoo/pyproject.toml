@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "papercompmoomoo"
+version = "0.1.0"
+description = "Isolated Moomoo paper-trading competition toolkit"
+requires-python = ">=3.11"
+dependencies = [
+    "futu-api==10.11.7108",
+    "pandas",
+]
+
+[project.scripts]
+papercompmoomoo = "papercompmoomoo.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

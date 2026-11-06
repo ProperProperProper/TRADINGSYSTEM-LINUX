@@ -1,0 +1,5 @@
+moomoo_opend=10.11.7108
+moomoo_api=10.11.7108
+opend_app=~/Applications/moomoo_OpenD.app
+sdk_venv=tools/moomoo-venv
+opend_tarball_sha256=40f98034636aa4cdfcba771c784b3b3c0e51ae8cd05a83acfc538abf6039bef9

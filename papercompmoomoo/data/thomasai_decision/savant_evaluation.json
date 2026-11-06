@@ -1,0 +1,24 @@
+{
+  "base": {
+    "max_drawdown_pct": 1.8002514930182658,
+    "return_pct": -1.665727830265784,
+    "trades": 270,
+    "wins": 78
+  },
+  "candidate": {
+    "max_drawdown_pct": 1.2026514000000088,
+    "return_pct": 6.919015582527588,
+    "trades": 34,
+    "wins": 14
+  },
+  "data_cutoff": "20748",
+  "model_version": "ThomasAi-Savant-v1",
+  "rust_command": "/Users/local.local/Projects/TradingSystem/target/release/thomas model-evaluate --decisions /Users/local.local/Projects/TradingSystem/data/thomasai_eval_decisions.jsonl --output /Users/local.local/Projects/TradingSystem/papercompmoomoo/data/thomasai_decision/savant_evaluation.json",
+  "self_capability": {
+    "causal_violations": 0,
+    "enter_envelopes": 34,
+    "valid_envelopes": 270
+  },
+  "source": "/Users/local.local/Projects/TradingSystem/data/thomasai_eval_decisions.jsonl",
+  "strategy_version": "cross-sectional-momentum-15m:v1:lookback20"
+}

@@ -1,0 +1,12 @@
+/target
+/dev
+/exports
+/exports-synthetic
+/quarantine
+/data
+/memory
+/reports
+/logs
+/requests
+/STOP
+/bin

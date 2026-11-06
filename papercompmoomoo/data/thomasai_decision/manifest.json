@@ -1,0 +1,50 @@
+{
+  "schema": 3,
+  "model": "ThomasAi",
+  "capability": "decision",
+  "base_checkpoint": {
+    "name": "Qwen3.5-9B-oQ4e-mtp",
+    "path": "/Users/local.local/.omlx/models/Qwen3.5-9B-oQ4e-mtp",
+    "files": {
+      "config.json": {
+        "bytes": 20526,
+        "sha256": "51f287442735d6afb514d4ac9f11c448a50def9ea9fc6f930f8add6e16126c03"
+      },
+      "model.safetensors.index.json": {
+        "bytes": 121214,
+        "sha256": "38f760611bfaf470abd03c399fad3971f7cde0bdb6e141890dd0d65f8060ec15"
+      },
+      "tokenizer_config.json": {
+        "bytes": 16710,
+        "sha256": "316230d6a809701f4db5ea8f8fc862bc3a6f3229c937c174e674ff3ca0a64ac8"
+      }
+    }
+  },
+  "source": "real closed 15-minute events from common15m.sqlite3",
+  "splitting": "chronological session split: train 70%, validation 15%, test 15%",
+  "counts": {
+    "train": 180,
+    "valid": 45,
+    "test": 45
+  },
+  "brain_ids": [
+    281
+  ],
+  "prompt_contract": "signal-bar fields only; forward bars are evaluation-only",
+  "label_contract": "Rust causal eligibility only; no synthetic or model-generated labels",
+  "promotion": "Rust evaluation, held-out evidence and safety gates required; never auto-activate",
+  "files": {
+    "train": {
+      "bytes": 152309,
+      "sha256": "0295fa2354a6ff39b27ee019d34e2a32e1d03fa8e823c1df38e4260eaf0c039c"
+    },
+    "valid": {
+      "bytes": 38014,
+      "sha256": "b09d9ff4172dfa3077c6c6c3c704569eb3153d9338a7758d7be59030f9de7781"
+    },
+    "test": {
+      "bytes": 37970,
+      "sha256": "e614a52bce0560fce0ff535c54d1351ed3a6b5e616a7aca00a6922293281798b"
+    }
+  }
+}

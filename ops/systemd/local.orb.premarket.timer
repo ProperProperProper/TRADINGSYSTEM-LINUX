@@ -1,0 +1,14 @@
+[Unit]
+Description=Refresh ORB Moomoo NASDAQ candidates every minute
+
+[Timer]
+# Let Gainers publish its first shared Moomoo movers snapshot at 04:00 ET
+# before ORB reads it. Refresh identified candidate candles on the native
+# one-minute cadence used by the entry and tape-activity checks.
+OnCalendar=Mon..Fri *-*-* 04..15:*:00 America/New_York
+Persistent=true
+AccuracySec=5s
+Unit=local.orb.premarket.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "signal", "p_up", "horizon_seconds", "reason"],
+  "properties": {
+    "action": {"type": "string", "enum": ["HOLD", "EXIT"]},
+    "signal": {"type": "string", "enum": ["vwap_failure", "structure_failure", "distribution", "momentum_decay", "protective_stop", "profit_target", "midpoint_failure", "session_flatten"]},
+    "p_up": {"type": "number", "minimum": 0, "maximum": 1},
+    "horizon_seconds": {"type": "integer", "minimum": 10, "maximum": 300},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 300}
+  }
+}

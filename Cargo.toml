@@ -1,0 +1,23 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/engine", "crates/cli"]
+# the trading bot is a library this workspace uses and has its own build (bot/Cargo.toml, bot/lab, bot/mcp)
+exclude = ["bot"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+rusqlite = { version = "0.29", features = ["bundled", "backup"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

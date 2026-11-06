@@ -1,0 +1,21 @@
+"""Install the zero-weight 1-minute ORB/gainer cognitive topology."""
+import json, sqlite3, time
+from pathlib import Path
+DB=Path(__file__).resolve().parents[1]/"data/brain.sqlite3"
+NODES=[
+ ("sensor:orb_premarket_gap","sensory","ORB premarket gap and liquidity"),("sensor:orb_opening_range_1m","sensory","ORB first five native 1-minute bars"),("sensor:orb_vwap_anchor","sensory","ORB VWAP anchor"),("sensor:orb_breakout_volume","sensory","ORB breakout volume"),("sensor:candle_quality_1m","sensory","1-minute candle freshness and integrity"),("sensor:gainer_leaderboard","sensory","NASDAQ live gainer leaderboard"),("sensor:gainer_rvol","sensory","Gainer relative volume"),("sensor:gainer_acceleration","sensory","Gainer price acceleration"),("sensor:gainer_bear_sentry","sensory","Gainer exhaustion veto"),
+ ("decision:orb_enter_long","decision","ORB long entry"),("decision:gainer_admit","decision","NASDAQ gainer admission"),("decision:paper_order_submit","decision","Paper order after risk checks"),("decision:manage_stop_target","decision","Deterministic stop and target management"),("decision:candle_quarantine","decision","Quarantine bad candles"),
+ ("outcome:orb_live_paper","outcome","ORB live-paper outcome"),("outcome:gainer_live_paper","outcome","Gainer live-paper outcome"),("outcome:orb_walk_forward","outcome","ORB walk-forward outcome"),("outcome:gainer_walk_forward","outcome","Gainer walk-forward outcome"),("learning:orb_feedback","decision","ORB test and paper feedback"),("learning:gainer_feedback","decision","Gainer test and paper feedback")]
+EDGES=[("sensor:orb_premarket_gap","decision:orb_enter_long"),("sensor:orb_opening_range_1m","decision:orb_enter_long"),("sensor:orb_vwap_anchor","decision:orb_enter_long"),("sensor:orb_breakout_volume","decision:orb_enter_long"),("sensor:gainer_leaderboard","decision:gainer_admit"),("sensor:gainer_rvol","decision:gainer_admit"),("sensor:gainer_acceleration","decision:gainer_admit"),("sensor:gainer_bear_sentry","decision:gainer_admit"),("sensor:candle_quality_1m","decision:candle_quarantine"),("decision:candle_quarantine","decision:orb_enter_long"),("decision:candle_quarantine","decision:gainer_admit"),("decision:orb_enter_long","decision:paper_order_submit"),("decision:gainer_admit","decision:paper_order_submit"),("decision:paper_order_submit","decision:manage_stop_target"),("decision:manage_stop_target","outcome:orb_live_paper"),("decision:manage_stop_target","outcome:gainer_live_paper"),("decision:orb_enter_long","outcome:orb_walk_forward"),("decision:gainer_admit","outcome:gainer_walk_forward"),("outcome:orb_live_paper","learning:orb_feedback"),("outcome:orb_walk_forward","learning:orb_feedback"),("outcome:gainer_live_paper","learning:gainer_feedback"),("outcome:gainer_walk_forward","learning:gainer_feedback")]
+def main():
+ now=int(time.time()*1000)
+ with sqlite3.connect(DB) as db:
+  for ident,kind,label in NODES: db.execute("INSERT OR IGNORE INTO brain_nodes(id,kind,label,activation_energy,threshold,metadata_json) VALUES(?,?,?,?,?,?)",(ident,kind,label,0,.5,json.dumps({'timeframe':'1m'})))
+  for ident,name in [(x[0],x[2]) for x in NODES if x[1]=='sensory']:
+   db.execute("INSERT OR IGNORE INTO brain_sensors(id,name,kind,config_json,created_ms,status,win_rate,edge_pct,sample_count) VALUES(?,?,?,?,?,?,?,?,?)",(ident,name,'market',json.dumps({'timeframe':'1m'}),now,'active',0.,0.,0))
+  for ident,name,category in [('skill:orb_opening_range_breakout','ORB 1-minute opening-range execution','entry'),('skill:gainer_top20_selection','Top-20 NASDAQ gainer selection','selection'),('skill:walk_forward_feedback','Causal walk-forward feedback ingestion','learning'),('skill:candle_quality_management','Stale and broken candle quarantine','data_quality')]:
+   db.execute("INSERT OR IGNORE INTO brain_skills(id,name,category,last_trained_ms,metadata_json) VALUES(?,?,?,?,?)",(ident,name,category,now,json.dumps({'timeframe':'1m'})))
+  for a,b in EDGES: db.execute("INSERT OR IGNORE INTO brain_synapses(source_id,target_id,weight,plasticity,hebbian_count,reinforcements,penalties) VALUES(?,?,1,.1,0,0,0)",(a,b))
+  db.commit()
+ print(json.dumps({'status':'ok','nodes':len(NODES),'edges':len(EDGES),'db':str(DB)}))
+if __name__=='__main__': main()

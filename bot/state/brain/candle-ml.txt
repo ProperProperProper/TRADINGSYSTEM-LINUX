@@ -1,0 +1,36 @@
+96 symbols, 482144 candles, 106650 samples (hourly moments x symbols); train 77733 samples over 207 days, test 27336 samples over 69 days (3-day purge)
+models (excess return over the next 26 bars, market direction removed):
+  trees (150 rounds)         rank IC +0.0025 [-0.0683,+0.0684] | top-minus-bottom fifth +10.2 bps [-49.1,+66.3] per session | top fifth +10.6 bps | 11 weeks
+  logistic (above/below)     rank IC -0.0041 [-0.1005,+0.0860] | top-minus-bottom fifth +3.9 bps [-75.4,+72.6] per session | top fifth +4.6 bps | 11 weeks
+simple signals, no learning:
+  reversal (-ret_26)         rank IC +0.0058 [-0.0512,+0.0731] | top-minus-bottom fifth +11.9 bps [-37.8,+63.1] per session | top fifth +7.2 bps | 11 weeks
+  reversal (-ret_4)          rank IC +0.0082 [-0.0163,+0.0353] | top-minus-bottom fifth +2.5 bps [-21.3,+25.6] per session | top fifth +1.7 bps | 11 weeks
+  momentum (ret_130)         rank IC -0.0372 [-0.1106,+0.0568] | top-minus-bottom fifth -42.1 bps [-114.7,+49.6] per session | top fifth -28.0 bps | 11 weeks
+  low volatility             rank IC +0.0162 [-0.0641,+0.1062] | top-minus-bottom fifth +4.5 bps [-64.6,+83.5] per session | top fifth +3.2 bps | 11 weeks
+  high volume surge          rank IC +0.0023 [-0.0271,+0.0251] | top-minus-bottom fifth +8.0 bps [-13.3,+26.7] per session | top fifth +5.7 bps | 11 weeks
+control: 5 trees trained on within-moment shuffled labels: IC -0.0190 -0.0190 +0.0000 +0.0000 +0.0336 (largest +0.0336); must be about 0
+learning curve (train on the earliest share of the training period, same fixed test):
+  first  25% of training ( 53 days, 10 rounds): IC -0.0069 [-0.0387,+0.0190], spread +7.2 bps
+  first  50% of training (103 days, 10 rounds): IC -0.0091 [-0.0921,+0.0622], spread -3.1 bps
+  first  75% of training (154 days, 10 rounds): IC -0.0157 [-0.1121,+0.0707], spread -2.5 bps
+  first 100% of training (207 days, 150 rounds): IC +0.0025 [-0.0669,+0.0710], spread +10.2 bps
+linear model (ridge, alpha 100; own solver, matches smartcore):
+  ridge, rolling 4-week windows rank IC +0.0346 [-0.0216,+0.0904] | top-minus-bottom fifth +41.8 bps [-10.5,+91.9] per session | top fifth +28.8 bps | 27 weeks
+  control: ridge on shuffled rank IC -0.0006 [-0.0082,+0.0070] | top-minus-bottom fifth -2.2 bps [-10.3,+5.3] per session | top fifth +0.2 bps | 27 weeks
+walk-forward WITH FEES: commission 0.99 USD per order, half-spreads measured per symbol (median 3.8 bps), account 5000 USD split over the positions; parameters re-chosen before every 14-session block from the previous 3 blocks
+  block 2026-04-01..2026-04-21: chose ridge 10000 | 2 positions | enter bar 10 | min edge 20 bps -> NET +34.3 bps/day, gross +40.6, fees 6.3, all names +64.1, traded 8/14
+  block 2026-04-22..2026-05-11: chose ridge 10000 | 2 positions | enter bar 10 | min edge 10 bps -> NET +115.2 bps/day, gross +128.7, fees 13.5, all names +29.8, traded 14/14
+  block 2026-05-12..2026-06-01: chose ridge 10000 | 3 positions | enter bar 2 | min edge 0 bps -> NET +58.3 bps/day, gross +72.7, fees 14.4, all names +40.2, traded 14/14
+  block 2026-06-02..2026-06-22: chose ridge 10000 | 3 positions | enter bar 10 | min edge 0 bps -> NET -111.0 bps/day, gross -98.6, fees 12.5, all names -14.6, traded 14/14
+  block 2026-06-23..2026-07-13: chose ridge 10000 | 3 positions | enter bar 2 | min edge 20 bps -> NET -38.1 bps/day, gross -22.5, fees 15.7, all names -4.3, traded 13/14
+  block 2026-07-14..2026-07-31: chose ridge 10000 | 10 positions | enter bar 2 | min edge 20 bps -> NET -2.3 bps/day, gross +12.3, fees 14.5, all names -20.8, traded 6/14
+  block 2026-08-03..2026-08-20: chose ridge 10000 | 10 positions | enter bar 10 | min edge 10 bps -> NET +21.0 bps/day, gross +24.5, fees 3.5, all names +23.6, traded 1/14
+  block 2026-08-21..2026-09-10: chose ridge 10 | 10 positions | enter bar 6 | min edge 20 bps -> NET +16.3 bps/day, gross +19.8, fees 3.5, all names +2.7, traded 1/14
+  block 2026-09-11..2026-09-30: chose ridge 100 | 2 positions | enter bar 2 | min edge 20 bps -> NET +8.4 bps/day, gross +23.3, fees 15.0, all names +3.9, traded 14/14
+  block 2026-10-01..2026-10-15: chose ridge 1000 | 2 positions | enter bar 2 | min edge 20 bps -> NET -291.0 bps/day, gross -276.8, fees 14.2, all names -9.5, traded 10/11
+pooled over all blocks (every day out of sample):
+  procedure (params re-chosen per block) NET -12.9 bps/day [-73.5,+39.4] | gross -1.7, fees 11.2, buy-and-hold of all names +12.0 | Sharpe -0.54, up days 32%, traded 95/137 days
+  fixed: 2 positions, 10:00, ridge 100 NET +33.6 bps/day [-37.2,+100.9] | gross +47.1, fees 13.5, buy-and-hold of all names +13.6 | Sharpe +1.14, up days 47%, traded 137/137 days
+  control: same procedure, shuffled labels NET +0.9 bps/day [-19.1,+26.9] | gross +3.2, fees 2.3, buy-and-hold of all names +14.0 | Sharpe +0.13, up days 6%, traded 21/137 days
+  FORWARD test (blocks starting on or after 2026-10-13): 0 sessions so far, needs 28 (two blocks)
+VERDICT: does not qualify: net of fees (commission and measured spreads) the pooled walk-forward interval includes zero

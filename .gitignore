@@ -1,0 +1,13 @@
+/target
+/data/*
+/papercompmoomoo/data/
+/papercompmoomoo/logs/
+/papercompmoomoo/.venv/
+/papercompmoomoo/**/__pycache__/
+/ops/__pycache__/
+/papercompmoomoo/**/*.py[cod]
+/papercompmoomoo/**/*.egg-info/
+/state/
+/tools/*
+!/tools/apple_ai_teacher.py
+!/data/symbol_map.csv

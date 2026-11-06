@@ -1,0 +1,13 @@
+{
+ "order": ["local", "claude", "codex", "gemini", "antigravity"],
+ "local_url": "http://127.0.0.1:8000/v1",
+ "local_model": "qwen2.5-7b-instruct",
+ "local_model_file": "/home/patrick/models/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+ "local_max_tokens": 500,
+ "claude_daily_calls": 40,
+ "codex_daily_calls": 40,
+ "gemini_daily_calls": 100,
+ "gemini_model": "",
+ "antigravity_daily_calls": 100,
+ "antigravity_model": ""
+}

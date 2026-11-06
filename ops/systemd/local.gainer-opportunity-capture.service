@@ -1,0 +1,19 @@
+[Unit]
+Description=Capture Gainer opportunity outcomes from existing local Moomoo snapshots
+After=local.papercompmoomoo.supervisor.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/patrick/TradingSystem
+ExecStart=/usr/bin/python3 /home/patrick/TradingSystem/papercompmoomoo/tools/gainer_opportunity_capture.py
+Restart=always
+RestartSec=5
+Nice=15
+IOSchedulingClass=idle
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/patrick/TradingSystem/papercompmoomoo/data
+
+[Install]
+WantedBy=default.target
