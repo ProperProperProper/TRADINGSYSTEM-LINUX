@@ -139,16 +139,6 @@ pub fn problems(root: &Path) -> Vec<Problem> {
             ),
         );
     }
-    let (built, installed) = (
-        root.join("bot/target/release/bot-ops"),
-        root.join("state/ClaudeMoomooBot/bin/bot-ops"),
-    );
-    if built.exists()
-        && installed.exists()
-        && std::fs::read(&built).ok() != std::fs::read(&installed).ok()
-    {
-        add(true, "the installed candle importer (state/ClaudeMoomooBot/bin/bot-ops) differs from the one just built: run bot-ops install-fetch".into());
-    }
     p
 }
 

@@ -58,5 +58,5 @@ pub fn source_hash(root: &Path, dirs: &[&str], extensions: &[&str]) -> String {
 }
 
 /// The files that make up the `thomas` binaries: this workspace's crates and the bot library they use.
-pub const BUILD_DIRS: [&str; 3] = ["crates", "bot/src", "bot/lab/src"];
+pub const BUILD_DIRS: [&str; 2] = ["crates", "bot/src"];
 pub const BUILD_EXTENSIONS: [&str; 2] = ["rs", "Cargo.toml"];

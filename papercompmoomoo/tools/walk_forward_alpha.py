@@ -28,7 +28,7 @@ def run_walk_forward():
 
     with sqlite3.connect(str(STORE)) as db:
         df = pd.read_sql_query("""
-            SELECT session, rank, score, observations, cutoff_day, moomoo_symbol, yahoo_symbol, net_return_pct
+            SELECT session, rank, score, observations, cutoff_day, moomoo_symbol, external_symbol, net_return_pct
             FROM momentum_forward_candidates
             WHERE outcome_complete=1
             ORDER BY session, rank
@@ -61,7 +61,7 @@ def run_walk_forward():
             for t in targets:
                 bars = pd.read_sql_query(
                     "SELECT ts, open, high, low, close FROM bars WHERE symbol=? ORDER BY ts",
-                    c_conn, params=(t.yahoo_symbol,)
+                    c_conn, params=(t.external_symbol,)
                 )
                 bars['date'] = pd.to_datetime(bars['ts'], unit='ms').dt.strftime('%Y-%m-%d')
                 day_bars = bars[bars['date'] == s].reset_index(drop=True)
@@ -87,7 +87,7 @@ def run_walk_forward():
                 session_weights.append(t.weight)
                 all_trades.append({
                     'session': s,
-                    'symbol': t.yahoo_symbol,
+                    'symbol': t.external_symbol,
                     'rank': t.rank,
                     'net_ret': net_ret
                 })

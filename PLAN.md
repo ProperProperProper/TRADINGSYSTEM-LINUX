@@ -1,6 +1,6 @@
 # TradingSystem project plan
 
-Reviewed: 2026-11-06. This plan describes the running paper-trading project. It is not the retired ThomasAi/Yahoo roadmap preserved in Git history.
+Reviewed: 2026-11-08. This plan describes the running paper-trading project. It is not the retired ThomasAi/legacy provider roadmap preserved in Git history.
 
 ## Current operating system
 
@@ -9,10 +9,10 @@ TradingSystem runs two Moomoo US simulated strategies against one configured `SI
 - **Gainers:** discovers movers during premarket and regular hours; fetches data for identified movers and open positions; enters only after its Nasdaq, liquidity, price, volume-pressure, CLV/Kalman, account, and fresh-quote checks pass. Premarket orders use the verified ETH session; regular-session orders use RTH.
 - **ORB:** prepares candidates from the shared mover snapshot before the open; enters only in its configured RTH opening window after opening-range, VWAP, volume-pressure, and confirmation checks pass.
 - **Exits:** the exit worker applies the deterministic ratcheting stop/target lines, confirmed price crossings, the audited ThomasAI liquidity-trap condition, and the 15:00 ET flatten. It does not use discretionary AI exit review for these two bots. ETH exits require fresh provider-time executable quotes; stale data cannot be made fresh by local receipt time.
-- **Market data:** Moomoo is the active bots' source. Candidate-specific native one-minute candles are written directly to the local SQLite store. The old Yahoo/converter feed is not part of live bot operation. Runtime databases and immutable evidence are local operational state and must be preserved.
+- **Market data:** Moomoo is the active bots' source. Candidate-specific native one-minute candles are written directly to the local SQLite store. The old legacy provider/converter feed is not part of live bot operation. Runtime databases and immutable evidence are local operational state and must be preserved.
 - **Dashboard:** the Rust portal is read-only. Overview displays the shared account summary followed by current or most-recent-session charts for each strategy. The current symbol-chart renderer stops at 16:00 ET, although exit monitoring can continue during extended hours.
 
-See [`README.md`](README.md), [`STATE.md`](STATE.md), [`docs/SYSTEM.md`](docs/SYSTEM.md), [`docs/MOOMOO.md`](docs/MOOMOO.md), and [`papercompmoomoo/STRATEGY.md`](papercompmoomoo/STRATEGY.md) for operating details. These do not replace live checks of Moomoo, service state, or broker fills.
+See [`README.md`](README.md) and [`STATE.md`](STATE.md) for operating details. These do not replace live checks of Moomoo, service state, or broker fills.
 
 ## Priorities
 
@@ -35,7 +35,7 @@ See [`README.md`](README.md), [`STATE.md`](STATE.md), [`docs/SYSTEM.md`](docs/SY
 - Preserve timestamped detection, approval, decisions, market-data source/provider times, order lifecycle, cancellations, and broker-confirmed fills for later review.
 - Keep candidate and trade data strategy-specific while account equity and buying power are labeled as shared.
 - Confirm charts use current New York session data, correct ET intervals, source/provider timestamps, account labels, and live price lines without mixing unrelated sessions.
-- Continue the shared research replay only after the full Moomoo US extended session closes at 20:00 ET (or on weekends), using recorded New York sessions with actual traded symbols and bot-specific filled entries/initial levels. The replay code refuses weekday 04:00–20:00 ET, including premarket and regular hours. Use Moomoo bars; report missing tick/book evidence and uncertain fills instead of fabricating them. Do not use the replay as a profitability claim.
+- Continue the shared research replay only after the full Moomoo US extended session closes at 20:00 ET (or on weekends). It replays candidate-scoped synthetic-GEX breakout entries plus GEX and deterministic price-line exits, while also replaying actual filled positions with recorded entry levels. The replay code refuses weekday 04:00–20:00 ET, including premarket and regular hours. Use Moomoo bars; report missing tick/book evidence and uncertain fills instead of fabricating them. Do not use the replay as a profitability claim.
 
 ### 4. Qwen learning is shelved
 

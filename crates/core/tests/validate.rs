@@ -76,8 +76,10 @@ fn missing_intraday_bars_are_a_gap() {
     let r = validate(&one(vec![
         good(0),
         good(60_000),
+        good(120_000),
+        good(180_000),
         good(1_800_000),
-        good(5_400_000),
+        good(1_860_000),
     ]));
     assert_eq!(r.per_symbol["X"].intraday_gaps, 1);
 }

@@ -1,11 +1,8 @@
 //! The one place for the research window settings (owner, 2026-10-18): one 40-session window, one 20-session warm-up, one search over the rest. Everything that needs these numbers reads them from here.
 
-/// Sessions of 1-minute candles used for learning, for every symbol and both sources (moomoo and Yahoo).
-/// Yahoo's 1-minute limit is 60 calendar days, which is about this many trading sessions.
-/// Whether this system downloads from Yahoo on its own (the trading calendar, 1-minute bars for every symbol, the paper trader's live feed). OFF since
-/// 2026-10-19 (owner): another project downloads from yfinance and Yahoo should not be asked by two programs. The manual commands (`fetch-extra`,
-/// `fetch-sessions`, `fetch-paper`) still work; the scheduled jobs do not call them while this is false.
-pub const YAHOO_DOWNLOADS: bool = false;
+/// Sessions of native Moomoo 1-minute candles used for learning and validation.
+/// External market-data downloads are disabled; active decisions use Moomoo data only.
+pub const MOOMOO_ONLY: bool = true;
 pub const WINDOW_SESSIONS: usize = 40;
 
 /// Sessions of history before a symbol is scored. The active research contract

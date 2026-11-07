@@ -12,5 +12,5 @@ pub mod pb {
 pub mod engine;
 pub mod opend;
 /// OS differences (folders, probes, process checks): the same file as the lab's, mirrored in lab/ (see lab/src/platform.rs).
-#[path = "../lab/src/platform.rs"]
+#[path = "platform.rs"]
 pub mod platform;

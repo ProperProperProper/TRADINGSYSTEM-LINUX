@@ -13,60 +13,60 @@ CREATE TABLE IF NOT EXISTS data_checks(
 
 -- Translation list between sources. Every row carries both spellings.
 -- moomoo_symbol = the security code the bot sends to OpenD (plain ticker) together with moomoo_market
--- (QotMarket US = 11, from the bot's src/engine/moomoo.rs). yahoo_match: verified | mismatch | unverified.
+-- (QotMarket US = 11, from the bot's src/engine/moomoo.rs). external_match: verified | mismatch | unverified.
 -- bot_status: tradable (in the bot's moomoo-verified universe) | unverified | research_only.
 CREATE TABLE IF NOT EXISTS symbols(
-    moomoo_symbol TEXT PRIMARY KEY, moomoo_market TEXT NOT NULL, yahoo_symbol TEXT NOT NULL UNIQUE,
+    moomoo_symbol TEXT PRIMARY KEY, moomoo_market TEXT NOT NULL, external_symbol TEXT NOT NULL UNIQUE,
     name TEXT, bot_status TEXT NOT NULL, in_spy INTEGER NOT NULL, in_bot_universe INTEGER NOT NULL,
-    has_moomoo_candles INTEGER NOT NULL, yahoo_returned_symbol TEXT, yahoo_name TEXT, yahoo_match TEXT NOT NULL,
+    has_moomoo_candles INTEGER NOT NULL, external_returned_symbol TEXT, external_name TEXT, external_match TEXT NOT NULL,
     overlap_bars INTEGER, close_diff_bps_median REAL, close_diff_bps_p99 REAL, volume_ratio_median REAL,
     evidence TEXT NOT NULL, verified_ms INTEGER NOT NULL);
 
--- Raw Yahoo 1m bars (last ~58 days) for the symbols fetched. An accumulating archive: never dropped on upgrade. The merged base
+-- Raw legacy provider 1m bars (last ~58 days) for the symbols fetched. An accumulating archive: never dropped on upgrade. The merged base
 -- (candles_merged) takes from it only what moomoo lacks.
 CREATE TABLE IF NOT EXISTS candles_extra(
-    moomoo_symbol TEXT NOT NULL, yahoo_symbol TEXT NOT NULL, wall_ms INTEGER NOT NULL, open REAL NOT NULL,
+    moomoo_symbol TEXT NOT NULL, external_symbol TEXT NOT NULL, wall_ms INTEGER NOT NULL, open REAL NOT NULL,
     high REAL NOT NULL, low REAL NOT NULL, close REAL NOT NULL, volume REAL NOT NULL, source TEXT NOT NULL,
     fetched_ms INTEGER NOT NULL, PRIMARY KEY(moomoo_symbol, wall_ms)) WITHOUT ROWID;
 
--- The merged candle base: moomoo is primary; Yahoo fills only what moomoo lacks (symbols without candles, missing bars, zero-volume bars).
--- Rebuilt by `thomas merge` from the moomoo snapshot + candles_extra (raw Yahoo archive). turnover for Yahoo rows is volume*(high+low+close)/3
--- (median error 0.03% against moomoo's real turnover on 89,753 overlapping bars); volume_reliable=0 for Yahoo's first/last bar of a
+-- The merged candle base: moomoo is primary; legacy provider fills only what moomoo lacks (symbols without candles, missing bars, zero-volume bars).
+-- Rebuilt by `thomas merge` from the moomoo snapshot + candles_extra (raw legacy provider archive). turnover for legacy provider rows is volume*(high+low+close)/3
+-- (median error 0.03% against moomoo's real turnover on 89,753 overlapping bars); volume_reliable=0 for legacy provider's first/last bar of a
 -- session, where its volume disagrees with moomoo's (auction handling).
 -- When each outside candle store was last read by `thomas import-bars` (the time the read began): rows the other project changed after it are read again next time.
 CREATE TABLE IF NOT EXISTS import_state(source TEXT PRIMARY KEY, last_ms INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS candles_merged(
-    moomoo_symbol TEXT NOT NULL, yahoo_symbol TEXT NOT NULL, wall_ms INTEGER NOT NULL, open REAL NOT NULL, high REAL NOT NULL,
+    moomoo_symbol TEXT NOT NULL, external_symbol TEXT NOT NULL, wall_ms INTEGER NOT NULL, open REAL NOT NULL, high REAL NOT NULL,
     low REAL NOT NULL, close REAL NOT NULL, volume REAL NOT NULL, turnover REAL NOT NULL, source TEXT NOT NULL,
     turnover_estimated INTEGER NOT NULL, volume_reliable INTEGER NOT NULL, PRIMARY KEY(moomoo_symbol, wall_ms)) WITHOUT ROWID;
 
 -- The real US trading calendar (regular sessions) from the research start. The bot's trading clock starts at the first session of its calendar, and
 -- rebalance timing depends on that origin, so the market must be built on the full calendar, not just on the days that have candles.
--- Open times are Yahoo's SPY daily-bar stamps (09:30 ET in UTC); close = open + 6.5 h (no early-close day falls in 2026 before November).
+-- Open times are legacy provider's SPY daily-bar stamps (09:30 ET in UTC); close = open + 6.5 h (no early-close day falls in 2026 before November).
 CREATE TABLE IF NOT EXISTS sessions_calendar(open_ms INTEGER PRIMARY KEY, close_ms INTEGER NOT NULL, source TEXT NOT NULL, fetched_ms INTEGER NOT NULL);
 
 -- What real history each symbol has, against the market calendar (timestamps most symbols traded).
 CREATE TABLE IF NOT EXISTS symbol_coverage(
-    moomoo_symbol TEXT PRIMARY KEY, yahoo_symbol TEXT NOT NULL, first_ms INTEGER NOT NULL, last_ms INTEGER NOT NULL,
-    moomoo_bars INTEGER NOT NULL, filled_from_yahoo INTEGER NOT NULL, gap_bars INTEGER NOT NULL,
+    moomoo_symbol TEXT PRIMARY KEY, external_symbol TEXT NOT NULL, first_ms INTEGER NOT NULL, last_ms INTEGER NOT NULL,
+    moomoo_bars INTEGER NOT NULL, filled_from_external INTEGER NOT NULL, gap_bars INTEGER NOT NULL,
     expected_bars INTEGER NOT NULL, complete INTEGER NOT NULL, checked_ms INTEGER NOT NULL);
 
 -- Real bars from a secondary source that fill gaps in the primary (moomoo) snapshot.
 CREATE TABLE IF NOT EXISTS candles_supplement(
-    moomoo_symbol TEXT NOT NULL, yahoo_symbol TEXT NOT NULL, wall_ms INTEGER NOT NULL, open REAL NOT NULL,
+    moomoo_symbol TEXT NOT NULL, external_symbol TEXT NOT NULL, wall_ms INTEGER NOT NULL, open REAL NOT NULL,
     high REAL NOT NULL, low REAL NOT NULL, close REAL NOT NULL, volume REAL NOT NULL, source TEXT NOT NULL,
     fetched_ms INTEGER NOT NULL, PRIMARY KEY(moomoo_symbol, wall_ms)) WITHOUT ROWID;
 
 -- Spans with no real data from any source; the engine must exclude them. kind: placeholder | no_trade | unavailable.
 CREATE TABLE IF NOT EXISTS data_gaps(
-    moomoo_symbol TEXT NOT NULL, yahoo_symbol TEXT NOT NULL, first_ms INTEGER NOT NULL, last_ms INTEGER NOT NULL,
+    moomoo_symbol TEXT NOT NULL, external_symbol TEXT NOT NULL, first_ms INTEGER NOT NULL, last_ms INTEGER NOT NULL,
     kind TEXT NOT NULL, bars INTEGER NOT NULL, detail TEXT NOT NULL, checked_ms INTEGER NOT NULL,
     PRIMARY KEY(moomoo_symbol, first_ms)) WITHOUT ROWID;
 
--- Moomoo vs Yahoo agreement per symbol over the overlap window.
+-- Moomoo vs legacy provider agreement per symbol over the overlap window.
 CREATE TABLE IF NOT EXISTS source_checks(
-    id INTEGER PRIMARY KEY, ts_ms INTEGER NOT NULL, moomoo_symbol TEXT NOT NULL, yahoo_symbol TEXT NOT NULL,
-    yahoo_returned_symbol TEXT, yahoo_name TEXT, overlap_bars INTEGER NOT NULL, missing_in_yahoo INTEGER NOT NULL,
+    id INTEGER PRIMARY KEY, ts_ms INTEGER NOT NULL, moomoo_symbol TEXT NOT NULL, external_symbol TEXT NOT NULL,
+    external_returned_symbol TEXT, external_name TEXT, overlap_bars INTEGER NOT NULL, missing_in_external INTEGER NOT NULL,
     close_diff_bps_median REAL, close_diff_bps_p99 REAL, close_diff_bps_max REAL, volume_ratio_median REAL);
 
 -- Versioned strategies; status is champion | challenger | rejected | retired.

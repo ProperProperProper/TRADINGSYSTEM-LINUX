@@ -36,7 +36,7 @@ pub fn init_common_schema(db: &Connection) -> Result<()> {
     db.execute_batch(
         "CREATE TABLE IF NOT EXISTS bars(
             symbol TEXT NOT NULL, ts INTEGER NOT NULL, open REAL NOT NULL, high REAL NOT NULL, low REAL NOT NULL, close REAL NOT NULL, volume REAL NOT NULL,
-            source TEXT NOT NULL DEFAULT 'yahoo', updated_ms INTEGER NOT NULL DEFAULT 0, vol_y REAL, vol_m REAL,
+            source TEXT NOT NULL DEFAULT 'external', updated_ms INTEGER NOT NULL DEFAULT 0, vol_legacy REAL, vol_m REAL,
             PRIMARY KEY(symbol, ts)) WITHOUT ROWID;
          CREATE TABLE IF NOT EXISTS baselines(symbol TEXT PRIMARY KEY, avg_volume REAL NOT NULL, computed TEXT NOT NULL) WITHOUT ROWID;
          CREATE TABLE IF NOT EXISTS hot(symbol TEXT PRIMARY KEY, requested_ms INTEGER NOT NULL, reason TEXT NOT NULL) WITHOUT ROWID;
@@ -48,10 +48,10 @@ pub fn init_common_schema(db: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Reconciles two volume sources (Moomoo and Yahoo):
+/// Reconciles two volume sources (Moomoo and legacy provider):
 /// If both present, averages them; otherwise takes whichever is present.
-pub fn reconcile_volume(vol_y: Option<f64>, vol_m: Option<f64>) -> f64 {
-    match (vol_y, vol_m) {
+pub fn reconcile_volume(vol_legacy: Option<f64>, vol_m: Option<f64>) -> f64 {
+    match (vol_legacy, vol_m) {
         (Some(y), Some(m)) if y > 0.0 && m > 0.0 => (y + m) / 2.0,
         (Some(y), _) => y.max(0.0),
         (_, Some(m)) => m.max(0.0),

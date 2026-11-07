@@ -44,7 +44,7 @@ fn map_symbols(text: &str) -> (HashSet<String>, Vec<String>) {
     (symbols, bad)
 }
 
-fn yahoo_to_moomoo(text: &str) -> HashMap<String, String> {
+fn external_to_moomoo(text: &str) -> HashMap<String, String> {
     text.lines()
         .skip(1)
         .filter_map(|line| {
@@ -93,12 +93,12 @@ fn verify_inputs(
     let stored: HashSet<String> = query_strings(c, "SELECT DISTINCT symbol FROM bars")?
         .into_iter()
         .collect();
-    let aliases = yahoo_to_moomoo(map_text);
+    let aliases = external_to_moomoo(map_text);
     add(
         "every mapped symbol has real converted bars",
         aliases
             .iter()
-            .filter(|(yahoo, _)| !stored.contains(*yahoo))
+            .filter(|(external, _)| !stored.contains(*external))
             .map(|(_, moomoo)| moomoo.clone())
             .collect(),
     );
@@ -113,18 +113,18 @@ fn verify_inputs(
         "every short-history symbol has a recorded full-history attempt",
         aliases
             .iter()
-            .filter(|(yahoo, _)| {
+            .filter(|(external, _)| {
                 let sessions = c
                     .query_row(
                         "SELECT count(DISTINCT ts/86400000) FROM bars WHERE symbol=?",
-                        [yahoo],
+                        [external],
                         |r| r.get::<_, i64>(0),
                     )
                     .unwrap_or(0);
                 let recorded = c
                     .query_row(
                         "SELECT 1 FROM meta WHERE key=?",
-                        [format!("backfilled:{yahoo}")],
+                        [format!("backfilled:{external}")],
                         |_| Ok(()),
                     )
                     .is_ok();
@@ -153,7 +153,7 @@ fn verify_inputs(
 }
 
 pub(crate) fn load_days(db: &str) -> Result<BTreeMap<i64, Vec<(String, f64)>>> {
-    let mapping = yahoo_to_moomoo(&std::fs::read_to_string("data/symbol_map.csv")?);
+    let mapping = external_to_moomoo(&std::fs::read_to_string("data/symbol_map.csv")?);
     let c = Connection::open_with_flags(db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     let mut sessions: BTreeMap<String, Vec<(i64, f64, f64, f64, f64)>> = BTreeMap::new();
     let mut last = HashMap::new();
@@ -524,7 +524,7 @@ mod tests {
         .unwrap();
         let checks = verify_inputs(
             &c,
-            "moomoo_symbol,market,yahoo_symbol\nAAA,US,AAA\nBBB,US,BBB\n",
+            "moomoo_symbol,market,external_symbol\nAAA,US,AAA\nBBB,US,BBB\n",
             "",
         )
         .unwrap();
@@ -540,9 +540,9 @@ mod tests {
     }
 
     #[test]
-    fn yahoo_aliases_are_translated_to_canonical_moomoo_symbols() {
+    fn external_aliases_are_translated_to_canonical_moomoo_symbols() {
         let aliases =
-            yahoo_to_moomoo("moomoo_symbol,market,yahoo_symbol\nBRK.B,US,BRK-B\nBF.B,US,BF-B\n");
+            external_to_moomoo("moomoo_symbol,market,external_symbol\nBRK.B,US,BRK-B\nBF.B,US,BF-B\n");
         assert_eq!(aliases.get("BRK-B").map(String::as_str), Some("BRK.B"));
         assert_eq!(aliases.get("BF-B").map(String::as_str), Some("BF.B"));
     }

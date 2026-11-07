@@ -14,7 +14,6 @@ import math
 import random
 import re
 import sqlite3
-from bisect import bisect_left
 from collections import defaultdict
 from datetime import datetime, time as wall_time
 from pathlib import Path
@@ -27,6 +26,116 @@ OPEN_EVENTS = ("live_gainer_discovered", "gainer_detected", "gainer_admitted", "
 
 RANDOM_GRID_COUNT = 10_000
 TOP_GRID_COUNT = 10
+
+
+class CausalSyntheticGEX:
+    """Point-in-time synthetic GEX proxy using only already-closed 1-minute bars."""
+
+    def __init__(self, strike_step: float = 5.0, half_life_bars: int = 45, warmup_bars: int = 20):
+        self.strike_step = float(strike_step)
+        self.decay_lambda = math.log(2.0) / max(int(half_life_bars), 1)
+        self.warmup_bars = max(int(warmup_bars), 1)
+        self.history: list[tuple[int, float, float]] = []
+        self.cumulative_volume_price = 0.0
+        self.cumulative_volume = 0.0
+
+    def observe(self, bar_idx: int, high: float, low: float, close: float, volume: float) -> None:
+        typical = (high + low + close) / 3.0
+        self.cumulative_volume_price += max(volume, 0.0) * typical
+        self.cumulative_volume += max(volume, 0.0)
+        friction = max(volume, 0.0) / max(high - low, 0.01)
+        strike = round(typical / self.strike_step) * self.strike_step
+        self.history.append((bar_idx, strike, friction))
+
+    def state(self, bar_idx: int, close: float) -> dict:
+        gamma_flip = self.cumulative_volume_price / max(self.cumulative_volume, 1.0)
+        state = {
+            "spot": float(close),
+            "regime": "WARMUP",
+            "call_wall": None,
+            "put_wall": None,
+            "gamma_flip": float(gamma_flip),
+            "observed_bars": len(self.history),
+        }
+        if len(self.history) < self.warmup_bars:
+            return state
+
+        density: dict[float, float] = {}
+        for observed_idx, strike, friction in self.history:
+            weight = math.exp(-self.decay_lambda * max(bar_idx - observed_idx, 0))
+            density[strike] = density.get(strike, 0.0) + friction * weight
+        above = [strike for strike in density if strike > close]
+        below = [strike for strike in density if strike < close]
+        call_wall = max(above, key=density.get) if above else close + self.strike_step
+        put_wall = max(below, key=density.get) if below else close - self.strike_step
+        state.update({
+            "regime": "POSITIVE_GAMMA" if close >= gamma_flip else "NEGATIVE_GAMMA",
+            "call_wall": float(call_wall),
+            "put_wall": float(put_wall),
+        })
+        return state
+
+
+def replay_candidate_entry_exit(symbol: str, bars: list[tuple], detected_ms: int,
+                                as_of_ms: int | None = None, strike_step: float = 5.0,
+                                half_life_bars: int = 45, warmup_bars: int = 20,
+                                breakout_buffer: float = 0.01, stop_buffer: float = 0.02) -> dict:
+    """Causally replay a candidate's GEX breakout entry and defensive exits.
+
+    A signal is evaluated from bars strictly before the current bar. An entry
+    is therefore filled at the next bar's open, never at the signal close.
+    Only the supplied candidate's candles are used.
+    """
+    usable = sorted(b for b in bars if b[0] >= detected_ms and (as_of_ms is None or b[0] <= as_of_ms))
+    if not usable:
+        return {"symbol": symbol, "status": "no_candidate_bars"}
+    engine = CausalSyntheticGEX(strike_step, half_life_bars, warmup_bars)
+    pending_entry = False
+    entry = None
+    entry_ts = None
+    exit_reason = None
+    exit_price = None
+    exit_ts = None
+    close_hour = 15
+    prior_close = None
+    for idx, (ts, op, hi, lo, close, volume) in enumerate(usable):
+        state = engine.state(ts, close)
+        entry_state = engine.state(ts, prior_close if prior_close is not None else close)
+        if pending_entry:
+            entry, entry_ts = float(op), int(ts)
+            pending_entry = False
+        if entry is not None and state["regime"] != "WARMUP":
+            if close < state["gamma_flip"]:
+                exit_reason, exit_price, exit_ts = "gex_regime_flip", float(close), int(ts)
+            elif state["call_wall"] is not None and close < state["call_wall"] * (1 - stop_buffer):
+                exit_reason, exit_price, exit_ts = "gex_call_wall_failure", float(close), int(ts)
+            elif datetime.fromtimestamp(ts / 1000, NY).hour >= close_hour:
+                exit_reason, exit_price, exit_ts = "session_flatten", float(op), int(ts)
+            if exit_reason:
+                break
+        elif entry is None and entry_state["regime"] == "POSITIVE_GAMMA" and entry_state["call_wall"] is not None:
+            # Compare the current close with the wall that was visible at the
+            # previous close. Recomputing walls after the breakout would move
+            # the wall above price and make a causal breakout impossible.
+            if close > entry_state["call_wall"] * (1 + breakout_buffer):
+                pending_entry = True
+        engine.observe(ts, hi, lo, close, volume)
+        prior_close = close
+    if entry is None:
+        return {"symbol": symbol, "status": "no_causal_entry", "bars": len(usable)}
+    if exit_price is None:
+        if as_of_ms is not None:
+            last = usable[-1]
+            exit_reason, exit_price, exit_ts = "open_at_asof_mark", float(last[4]), int(last[0])
+        else:
+            last = usable[-1]
+            exit_reason, exit_price, exit_ts = "session_flatten", float(last[4]), int(last[0])
+    return {
+        "symbol": symbol, "status": "entry_exit_replayed", "entry_price": entry,
+        "entry_ts_ms": entry_ts, "exit_price": exit_price, "exit_ts_ms": exit_ts,
+        "exit_reason": exit_reason, "gross_return_pct": (exit_price / entry - 1) * 100,
+        "bars": len(usable),
+    }
 
 
 def random_grid_candidates(session: str, as_of_ms: int, count: int = RANDOM_GRID_COUNT) -> list[dict]:
@@ -294,8 +403,14 @@ def _bars_by_symbol(path: Path, symbols: set[str] | None = None, session: str | 
 
 def replay_position(trade: dict, bars: list[tuple], cost_bps: float, as_of_ms: int | None = None,
                     grid_config: dict | None = None, preselected_bars: bool = False) -> dict:
-    grid_config = grid_config or {"stop_scale": 1.0, "trail_scale": 1.0, "target_scale": 1.0,
-                                  "target_70_fraction": 0.70, "profit_line_fractions": [0.5]}
+    defaults = {"stop_scale": 1.0, "trail_scale": 1.0, "target_scale": 1.0,
+                "target_70_fraction": 0.70, "profit_line_fractions": [0.5],
+                "gex_enabled": True, "gex_strike_step": 5.0,
+                "gex_half_life_bars": 45, "gex_warmup_bars": 20,
+                "gex_stop_buffer": 0.02}
+    merged_grid_config = dict(defaults)
+    merged_grid_config.update(grid_config or {})
+    grid_config = merged_grid_config
     entry = trade["entry"]
     base_stop_pct = (entry - trade["initial_stop"]) / entry * 100
     base_target_pct = (trade["initial_target"] - entry) / entry * 100
@@ -314,12 +429,22 @@ def replay_position(trade: dict, bars: list[tuple], cost_bps: float, as_of_ms: i
     midpoint = (target70 + stop) / 2
     ladder = _profit_ladder(target70, midpoint, line_fractions)
     intermediate = ladder[0] if ladder else midpoint
+    available_bars = [b for b in bars if session_for(b[0]) == trade["session"] and (as_of_ms is None or b[0] <= as_of_ms)]
     if preselected_bars:
-        position_bars = bars
+        position_bars = available_bars
     else:
-        position_bars = [b for b in bars if b[0] >= trade["opened_ms"] and session_for(b[0]) == trade["session"] and (as_of_ms is None or b[0] <= as_of_ms)]
+        position_bars = [b for b in available_bars if b[0] >= trade["opened_ms"]]
     if not position_bars:
         return {"replay_status": "no_post_entry_moomoo_bars"}
+    gex = CausalSyntheticGEX(
+        grid_config.get("gex_strike_step", 5.0),
+        grid_config.get("gex_half_life_bars", 45),
+        grid_config.get("gex_warmup_bars", 20),
+    ) if grid_config.get("gex_enabled", True) else None
+    if gex is not None:
+        for bar_idx, _op, hi, lo, close, volume in available_bars:
+            if bar_idx < position_bars[0][0]:
+                gex.observe(bar_idx, hi, lo, close, volume)
     close_ms = int(datetime.strptime(trade["session"] + " 15:00", "%Y-%m-%d %H:%M").replace(tzinfo=NY).timestamp() * 1000)
 
     def finish(fill, reason, ts, fill_method):
@@ -329,9 +454,16 @@ def replay_position(trade: dict, bars: list[tuple], cost_bps: float, as_of_ms: i
         result["additional_profit_line_levels"] = list(ladder)
         return result
 
-    for ts, op, hi, lo, close, _volume in position_bars:
+    for ts, op, hi, lo, close, volume in position_bars:
         if ts >= close_ms:
             return finish(op, "session_flatten", ts, "bar_open_at_15:00_ET")
+        gex_state = gex.state(ts, close) if gex is not None else None
+        if gex_state and gex_state["regime"] != "WARMUP":
+            if close < gex_state["gamma_flip"]:
+                return finish(close, "gex_regime_flip", ts, "causal_synthetic_gex_close")
+            call_wall = gex_state["call_wall"]
+            if call_wall is not None and close < call_wall * (1 - float(grid_config.get("gex_stop_buffer", 0.02))):
+                return finish(close, "gex_call_wall_failure", ts, "causal_synthetic_gex_close")
         # Evaluate only lines that were known before this minute. OHLC does not
         # reveal whether its high or low came first, so apply adverse crossings
         # before advancing the high-water mark; new ratchets take effect next bar.
@@ -361,6 +493,8 @@ def replay_position(trade: dict, bars: list[tuple], cost_bps: float, as_of_ms: i
         new_ladder = _profit_ladder(target70, midpoint, line_fractions)
         ladder = [max(old, new) for old, new in zip(ladder, new_ladder)] if len(ladder) == len(new_ladder) else new_ladder
         intermediate = ladder[0] if ladder else midpoint
+        if gex is not None:
+            gex.observe(ts, hi, lo, close, volume)
     last = position_bars[-1]
     if as_of_ms is not None:
         result = finish(last[4], "open_at_asof_mark", last[0], "latest recorded Moomoo close; hypothetical position remains open")
@@ -389,9 +523,7 @@ def optimize_symbol_grids(trades: list[dict], candles: dict[str, list[tuple]], c
     by_symbol: dict[str, list[tuple[dict, list[tuple]]]] = defaultdict(list)
     for trade in trades:
         source = candles.get(trade["symbol"], [])
-        times = [b[0] for b in source]
-        first = bisect_left(times, trade["opened_ms"])
-        selected = [b for b in source[first:] if as_of_ms is None or b[0] <= as_of_ms]
+        selected = [b for b in source if as_of_ms is None or b[0] <= as_of_ms]
         by_symbol[trade["symbol"]].append((trade, selected))
 
     baseline = {"stop_scale": 1.0, "trail_scale": 1.0, "target_scale": 1.0,
@@ -408,7 +540,7 @@ def optimize_symbol_grids(trades: list[dict], candles: dict[str, list[tuple]], c
             per_trade = []
             for trade, bars in positions:
                 result = replay_position(trade, bars, cost_bps, as_of_ms=as_of_ms,
-                                         grid_config=config, preselected_bars=True)
+                                         grid_config=config)
                 if not result.get("replay_status", "").startswith(("price_lines_replayed", "open_at_asof_mark")):
                     return None
                 pnl = trade["qty"] * trade["entry"] * result["replay_net_return_pct"] / 100
@@ -477,7 +609,14 @@ def run_session(session: str, data: Path = DATA, cost_bps: float = 10.0, as_of_m
                 scope = _orb_candidates(db, session, True)
                 scope.setdefault(session, {})
                 trades = _orb_rows(db, scope, only_session=session)
-        bars = _bars_by_symbol(data / "common1m.sqlite3", {t["symbol"] for t in trades}, session)
+        candidate_symbols = set(scope.get(session, {})) | {t["symbol"] for t in trades}
+        bars = _bars_by_symbol(data / "common1m.sqlite3", candidate_symbols, session)
+        candidate_replays = [
+            replay_candidate_entry_exit(
+                symbol, bars.get(symbol, []), int(detected_ms), as_of_ms=as_of_ms,
+            )
+            for symbol, detected_ms in sorted(scope.get(session, {}).items())
+        ]
         for trade in trades:
             result = replay_position(trade, bars.get(trade["symbol"], []), cost_bps, as_of_ms=as_of_ms)
             trade.update(result)
@@ -497,11 +636,21 @@ def run_session(session: str, data: Path = DATA, cost_bps: float = 10.0, as_of_m
             "actual_net_pnl_usd": sum(t["actual_pnl_usd"] for t in trades),
             "replay_net_pnl_usd": sum(t["replay_net_pnl_usd"] for t in complete),
             "trades": trades,
+            "entry_exit_replay": {
+                "candidate_count": len(candidate_replays),
+                "entries": sum(r.get("status") == "entry_exit_replayed" for r in candidate_replays),
+                "results": candidate_replays,
+                "entry_rule": "positive gamma and close above causal call wall by 1%; fill at next bar open",
+                "exit_rules": ["close below causal VWAP gamma flip", "close below causal call wall minus 2%", "15:00 ET session flatten"],
+                "live_bot_settings_changed": False,
+            },
             "exit_grid_optimization": {
                 "candidate_grids_per_run": len(grid_configs),
                 "grid_dimensions": {"initial_stop_scale": [0.5, 1.5], "high_water_trail_scale": [0.5, 1.5],
                                     "full_target_scale": [0.5, 2.0], "70_percent_line_fraction": [0.5, 0.95],
-                                    "extra_downward_lines_between_midpoint_and_70": [0, 4]},
+                                    "extra_downward_lines_between_midpoint_and_70": [0, 4],
+                                    "synthetic_gex": {"strike_step": 5.0, "half_life_bars": 45,
+                                                      "warmup_bars": 20, "call_wall_stop_buffer": 0.02}},
                 "refresh_interval_minutes": 15,
                 "symbols": optimize_symbol_grids(trades, bars, cost_bps, as_of_ms, grid_configs),
                 "live_bot_settings_changed": False,
@@ -515,7 +664,7 @@ def run_session(session: str, data: Path = DATA, cost_bps: float = 10.0, as_of_m
         "as_of_mode": "live mark-to-latest-Moomoo-candle" if as_of_ms is not None else "completed-session replay",
         "optimizer_candidate_grid_count": len(grid_configs),
         "cost_bps_per_round_trip": cost_bps,
-        "method": "actual fills; recorded per-position entry terms; high-water ratcheting exit lines; Moomoo-native 1-minute candles",
+        "method": "actual fills; causal prior-bar synthetic GEX (decayed friction walls and running VWAP gamma flip); recorded per-position entry terms; high-water ratcheting exit lines; Moomoo-native 1-minute candles",
         "limitations": ["Minute OHLC cannot reconstruct the exact intrabar order of touches or executable bid; estimated line fills are not broker fills.", "Positions without complete Moomoo candles are excluded from replay P&L and listed as data gaps."],
         "bots": reports,
     }

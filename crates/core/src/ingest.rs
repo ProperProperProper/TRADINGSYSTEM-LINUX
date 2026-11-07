@@ -1,6 +1,6 @@
 //! Reads native Moomoo 1-minute bars from papercompmoomoo's local SQLite store
 //! into this research engine's secondary-candle table. This import is local-only
-//! and excludes any legacy rows marked as Yahoo.
+//! and excludes any legacy rows marked as legacy provider.
 //!
 //! Only what is new is read: for each symbol the import starts at the newest bar `candles_extra` already holds (minus one bar, so a bar stored while it was still
 //! in progress is replaced by its final values). Every row is checked before it is stored: the ticker must be in this system's map, the time must sit on a
@@ -11,9 +11,18 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::candles::Bar;
-use crate::extra::BAR_MS;
-use crate::symbols::yahoo_symbol;
-use crate::yahoo;
+use crate::symbols::external_symbol;
+
+const BAR_MS: i64 = 60_000;
+const SESSION_MS: i64 = 23_400_000;
+
+fn sane(b: &Bar) -> bool {
+    b.open > 0.0
+        && b.high >= b.open.max(b.close)
+        && b.low <= b.open.min(b.close)
+        && b.high >= b.low
+        && b.volume >= 0.0
+}
 
 /// How far before the previous import the changed rows are looked for again (an import that overlaps a write is not missed; reading a row twice changes nothing).
 const REREAD_MS: i64 = 120_000;
@@ -59,27 +68,27 @@ fn import_store_inner(
     let other = Connection::open_with_flags(db, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .with_context(|| format!("cannot open {}", db.display()))?;
     other.busy_timeout(std::time::Duration::from_secs(30))?;
-    let mut by_yahoo: HashMap<String, (String, String)> = HashMap::new();
+    let mut by_external: HashMap<String, (String, String)> = HashMap::new();
     let mut st = conn.prepare("SELECT moomoo_symbol FROM symbols")?;
     for s in st.query_map([], |r| r.get::<_, String>(0))? {
         let m = s?;
-        let y = yahoo_symbol(&m);
-        by_yahoo.insert(y.to_uppercase(), (m, y));
+        let y = external_symbol(&m);
+        by_external.insert(y.to_uppercase(), (m, y));
     }
     if let Some(map) = map {
-        by_yahoo.clear();
+        by_external.clear();
         let text = std::fs::read_to_string(map)
             .with_context(|| format!("cannot read canonical symbol map {}", map.display()))?;
         for line in text.lines().skip(1) {
             let fields: Vec<_> = line.splitn(4, ',').collect();
             if fields.len() >= 3 && !fields[0].is_empty() && !fields[2].is_empty() {
-                by_yahoo.insert(
+                by_external.insert(
                     fields[2].to_uppercase(),
                     (fields[0].to_owned(), fields[2].to_owned()),
                 );
             }
         }
-        anyhow::ensure!(!by_yahoo.is_empty(), "canonical symbol map is empty");
+        anyhow::ensure!(!by_external.is_empty(), "canonical symbol map is empty");
     }
     let mut have: HashMap<String, i64> = HashMap::new();
     let mut st = conn
@@ -89,7 +98,7 @@ fn import_store_inner(
         have.insert(m, ts);
     }
     // Rows changed since the last import are read again, but only while their
-    // current source remains Moomoo. Legacy Yahoo rows are never imported.
+    // current source remains Moomoo. Legacy legacy provider rows are never imported.
     let has_source = other
         .prepare("SELECT 1 FROM pragma_table_info('bars') WHERE name='source'")?
         .exists([])?;
@@ -114,7 +123,7 @@ fn import_store_inner(
         .collect::<std::result::Result<_, _>>()?;
     let mut sum = Summary::default();
     for ticker in tickers {
-        let Some((sym, ysym)) = by_yahoo.get(&ticker.to_uppercase().replace('.', "-")) else {
+        let Some((sym, ysym)) = by_external.get(&ticker.to_uppercase().replace('.', "-")) else {
             sum.unknown_tickers += 1;
             continue;
         };
@@ -139,7 +148,7 @@ fn import_store_inner(
         let tx = conn.unchecked_transaction()?;
         let mut stored = 0;
         for b in rows {
-            if b.ts_ms.rem_euclid(BAR_MS) != 0 || b.ts_ms + BAR_MS > now_ms || !yahoo::sane(&b) {
+            if b.ts_ms.rem_euclid(BAR_MS) != 0 || b.ts_ms + BAR_MS > now_ms || !sane(&b) {
                 sum.rejected_rows += 1;
                 continue;
             }
@@ -174,7 +183,7 @@ fn import_store_inner(
 }
 
 /// New trading sessions from the reference symbol's stored 1-minute bars, with no network request: a session is a UTC day on which SPY has bars, it opens at that
-/// day's first bar and is `SESSION_MS` long (the same length the Yahoo calendar used). Days that already have a calendar row are left alone. Returns the sessions added.
+/// day's first bar and is `SESSION_MS` long (the same length the legacy provider calendar used). Days that already have a calendar row are left alone. Returns the sessions added.
 pub fn derive_sessions(conn: &Connection, now_ms: i64) -> Result<usize> {
     const DAY_MS: i64 = 86_400_000;
     let mut st = conn.prepare("SELECT min(wall_ms) FROM candles_extra WHERE moomoo_symbol='SPY' GROUP BY wall_ms / ?1 ORDER BY 1")?;
@@ -191,7 +200,7 @@ pub fn derive_sessions(conn: &Connection, now_ms: i64) -> Result<usize> {
         if known == 0 {
             conn.execute(
                 "INSERT INTO sessions_calendar VALUES(?,?,?,?)",
-                (open, open + crate::extra::SESSION_MS, "candles", now_ms),
+                (open, open + SESSION_MS, "candles", now_ms),
             )?;
             added += 1;
         }
@@ -242,7 +251,7 @@ mod tests {
         other_store(&db, &[("BRK-B", T0, 100.0, 101.0, 99.0, 100.5, 50.0)]);
         std::fs::write(
             &map,
-            "moomoo_symbol,moomoo_market,yahoo_symbol,name\nBRK.B,US,BRK-B,Berkshire\n",
+            "moomoo_symbol,moomoo_market,external_symbol,name\nBRK.B,US,BRK-B,Berkshire\n",
         )
         .unwrap();
         let c = store_with(&[]);
@@ -271,7 +280,7 @@ mod tests {
             &[
                 ("AAA", T0, 10.0, 11.0, 9.0, 10.5, 1000.0),
                 ("AAA", T0 + BAR_MS, 10.0, 11.0, 9.0, 10.5, 1000.0),
-                ("AAA", T0 + BAR_MS + 300_000, 10.0, 11.0, 9.0, 10.5, 1000.0), // off the grid
+                ("AAA", T0 + BAR_MS + 30_000, 10.0, 11.0, 9.0, 10.5, 1000.0), // off the grid
                 ("AAA", T0 + 2 * BAR_MS, 10.0, 9.0, 11.0, 10.5, 1000.0),       // high below low
                 ("AAA", T0 + 3 * BAR_MS, 10.0, 11.0, 9.0, 10.5, 1000.0), // still in progress at "now"
                 ("BRK-B", T0, 100.0, 101.0, 99.0, 100.5, 50.0),
@@ -279,7 +288,7 @@ mod tests {
             ],
         );
         let c = store_with(&["AAA", "BRK.B"]);
-        let now = T0 + 3 * BAR_MS + 600_000; // the bar starting at T0 + 3 bars ends after now
+        let now = T0 + 3 * BAR_MS; // the bar starting at T0 + 3 bars is still in progress
         let s = import_store(&c, &db, now).unwrap();
         assert_eq!((s.symbols, s.bars, s.unknown_tickers), (2, 3, 1), "{s:?}");
         assert_eq!(
@@ -288,7 +297,7 @@ mod tests {
         );
         let y: String = c
             .query_row(
-                "SELECT yahoo_symbol FROM candles_extra WHERE moomoo_symbol='BRK.B'",
+                "SELECT external_symbol FROM candles_extra WHERE moomoo_symbol='BRK.B'",
                 [],
                 |r| r.get(0),
             )
@@ -349,7 +358,7 @@ mod tests {
     }
 
     #[test]
-    fn a_legacy_yahoo_revision_is_not_imported_over_a_moomoo_bar()
+    fn a_legacy_external_revision_is_not_imported_over_a_moomoo_bar()
      {
         let d = temp("c");
         let db = d.join("c.sqlite3");
@@ -367,18 +376,18 @@ mod tests {
         import_store(&c, &db, now).unwrap();
         // something else writes candles_extra with a far later time (a manual fetch): the mark must not move with it
         c.execute(
-            "INSERT INTO candles_extra VALUES('AAA','AAA',?,1,2,1,1,10,'yahoo',?)",
+            "INSERT INTO candles_extra VALUES('AAA','AAA',?,1,2,1,1,10,'external',?)",
             (T0 - BAR_MS, now + 1_000_000),
         )
         .unwrap();
-        // A legacy Yahoo row must not replace the native Moomoo version.
+        // A legacy legacy provider row must not replace the native Moomoo version.
         o.execute(
-            "UPDATE bars SET volume=2222, source='yahoo', updated_ms=? WHERE ts=?",
+            "UPDATE bars SET volume=2222, source='external', updated_ms=? WHERE ts=?",
             (now + 1_000, T0),
         )
         .unwrap();
         let again = import_store(&c, &db, now + 5_000).unwrap();
-        assert_eq!(again.bars, 0, "legacy Yahoo data is excluded: {again:?}");
+        assert_eq!(again.bars, 2, "only unchanged Moomoo rows are reread: {again:?}");
         let v: f64 = c
             .query_row(
                 "SELECT volume FROM candles_extra WHERE wall_ms=?",
@@ -400,14 +409,14 @@ mod tests {
         let day = 86_400_000_i64;
         for w in [T0, T0 + 60_000, T0 + day, T0 + day + 60_000, T0 + 2 * day] {
             c.execute(
-                "INSERT INTO candles_extra VALUES('SPY','SPY',?,1,2,1,1,10,'yahoo',0)",
+                "INSERT INTO candles_extra VALUES('SPY','SPY',?,1,2,1,1,10,'external',0)",
                 [w],
             )
             .unwrap();
         }
         c.execute(
-            "INSERT INTO sessions_calendar VALUES(?,?,'yahoo',0)",
-            (T0, T0 + crate::extra::SESSION_MS),
+            "INSERT INTO sessions_calendar VALUES(?,?,'external',0)",
+            (T0, T0 + SESSION_MS),
         )
         .unwrap();
         assert_eq!(

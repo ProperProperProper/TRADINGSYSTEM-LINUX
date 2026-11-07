@@ -31,7 +31,7 @@ impl StrategyMode {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct TargetCandidate {
     pub moomoo_symbol: String,
-    pub yahoo_symbol: String,
+    pub external_symbol: String,
     pub rank: usize,
     pub score: f64,
     pub weight: f64,
@@ -215,7 +215,7 @@ pub fn get_symbol_optimal_bracket(symbol: &str) -> (f64, f64, Option<(f64, f64)>
 #[derive(Debug, Clone)]
 pub struct CandidateInput {
     pub moomoo_symbol: String,
-    pub yahoo_symbol: String,
+    pub external_symbol: String,
     pub rank: usize,
     pub score: f64,
 }
@@ -235,10 +235,10 @@ pub fn select_alpha_candidates(
     match mode {
         StrategyMode::Rank1AlphaEngine => {
             if let Some(c) = candidates.iter().find(|c| c.rank == 1) {
-                let (tp, sl, _) = get_symbol_optimal_bracket(&c.yahoo_symbol);
+                let (tp, sl, _) = get_symbol_optimal_bracket(&c.external_symbol);
                 targets.push(TargetCandidate {
                     moomoo_symbol: c.moomoo_symbol.clone(),
-                    yahoo_symbol: c.yahoo_symbol.clone(),
+                    external_symbol: c.external_symbol.clone(),
                     rank: 1,
                     score: c.score,
                     weight: 1.0,
@@ -251,10 +251,10 @@ pub fn select_alpha_candidates(
         }
         StrategyMode::StagedScaleOut => {
             if let Some(c) = candidates.iter().find(|c| c.rank == 1) {
-                let (tp, sl, staged) = get_symbol_optimal_bracket(&c.yahoo_symbol);
+                let (tp, sl, staged) = get_symbol_optimal_bracket(&c.external_symbol);
                 targets.push(TargetCandidate {
                     moomoo_symbol: c.moomoo_symbol.clone(),
-                    yahoo_symbol: c.yahoo_symbol.clone(),
+                    external_symbol: c.external_symbol.clone(),
                     rank: 1,
                     score: c.score,
                     weight: 1.0,
@@ -277,10 +277,10 @@ pub fn select_alpha_candidates(
             let tot_w: f64 = selected.iter().map(|(_, w)| *w).sum();
             let tot_w = if tot_w > 0.0 { tot_w } else { 1.0 };
             for (c, w) in selected {
-                let (tp, sl, _) = get_symbol_optimal_bracket(&c.yahoo_symbol);
+                let (tp, sl, _) = get_symbol_optimal_bracket(&c.external_symbol);
                 targets.push(TargetCandidate {
                     moomoo_symbol: c.moomoo_symbol.clone(),
-                    yahoo_symbol: c.yahoo_symbol.clone(),
+                    external_symbol: c.external_symbol.clone(),
                     rank: c.rank,
                     score: c.score,
                     weight: ((w / tot_w) * 10000.0).round() / 10000.0,
@@ -310,10 +310,10 @@ pub fn select_alpha_candidates(
             let tot_w: f64 = selected.iter().map(|(_, w)| *w).sum();
             let tot_w = if tot_w > 0.0 { tot_w } else { 1.0 };
             for (c, w) in selected {
-                let (tp, sl, staged) = get_symbol_optimal_bracket(&c.yahoo_symbol);
+                let (tp, sl, staged) = get_symbol_optimal_bracket(&c.external_symbol);
                 targets.push(TargetCandidate {
                     moomoo_symbol: c.moomoo_symbol.clone(),
-                    yahoo_symbol: c.yahoo_symbol.clone(),
+                    external_symbol: c.external_symbol.clone(),
                     rank: c.rank,
                     score: c.score,
                     weight: ((w / tot_w) * 10000.0).round() / 10000.0,
@@ -404,19 +404,19 @@ mod tests {
         let cands = vec![
             CandidateInput {
                 moomoo_symbol: "US.MRNA".to_string(),
-                yahoo_symbol: "MRNA".to_string(),
+                external_symbol: "MRNA".to_string(),
                 rank: 1,
                 score: 0.85,
             },
             CandidateInput {
                 moomoo_symbol: "US.ALAB".to_string(),
-                yahoo_symbol: "ALAB".to_string(),
+                external_symbol: "ALAB".to_string(),
                 rank: 2,
                 score: 0.40,
             },
             CandidateInput {
                 moomoo_symbol: "US.TSLA".to_string(),
-                yahoo_symbol: "TSLA".to_string(),
+                external_symbol: "TSLA".to_string(),
                 rank: 3,
                 score: 0.30,
             },
@@ -424,15 +424,15 @@ mod tests {
 
         let targets = select_alpha_candidates(cands, StrategyMode::DynamicConvictionPortfolio);
         assert_eq!(targets.len(), 3);
-        assert_eq!(targets[0].yahoo_symbol, "MRNA");
+        assert_eq!(targets[0].external_symbol, "MRNA");
         assert_eq!(targets[0].weight, 0.60);
         assert_eq!(targets[0].take_profit_pct, 0.05);
         assert_eq!(targets[0].stop_loss_pct, 0.08); // optimized profile for MRNA
 
-        assert_eq!(targets[1].yahoo_symbol, "ALAB");
+        assert_eq!(targets[1].external_symbol, "ALAB");
         assert_eq!(targets[1].weight, 0.25);
 
-        assert_eq!(targets[2].yahoo_symbol, "TSLA");
+        assert_eq!(targets[2].external_symbol, "TSLA");
         assert_eq!(targets[2].weight, 0.15);
     }
 }

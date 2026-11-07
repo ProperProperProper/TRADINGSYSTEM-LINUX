@@ -20,7 +20,7 @@ pub enum Decision {
 #[serde(deny_unknown_fields)]
 pub struct Symbols {
     pub moomoo: String,
-    pub yahoo: String,
+    pub external: String,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -55,8 +55,8 @@ pub fn parse(input: &str, now_ms: i64) -> Result<Envelope> {
         "moomoo symbol is required"
     );
     ensure!(
-        !envelope.symbol.yahoo.trim().is_empty(),
-        "yahoo symbol is required"
+        !envelope.symbol.external.trim().is_empty(),
+        "external symbol is required"
     );
     ensure!(
         envelope.signal_ts_ms <= now_ms,
@@ -106,14 +106,14 @@ mod tests {
     use super::*;
 
     fn valid() -> &'static str {
-        r#"{"schema":1,"decision":"abstain","symbol":{"moomoo":"US.X","yahoo":"X"},"signal_ts_ms":100,"confidence":0.4,"reason":"insufficient evidence","brain_ids":[7],"board_ids":[],"data_cutoff":"2026-10-22T00:00:00Z","strategy_version":"2","model_version":"qwen-base"}"#
+        r#"{"schema":1,"decision":"abstain","symbol":{"moomoo":"US.X","external":"X"},"signal_ts_ms":100,"confidence":0.4,"reason":"insufficient evidence","brain_ids":[7],"board_ids":[],"data_cutoff":"2026-10-22T00:00:00Z","strategy_version":"2","model_version":"qwen-base"}"#
     }
 
     #[test]
     fn parses_valid_envelope() {
         let parsed = parse(valid(), 100).unwrap();
         assert_eq!(parsed.decision, Decision::Abstain);
-        assert_eq!(parsed.symbol.yahoo, "X");
+        assert_eq!(parsed.symbol.external, "X");
     }
 
     #[test]

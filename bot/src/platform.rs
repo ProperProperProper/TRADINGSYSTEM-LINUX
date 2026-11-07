@@ -10,7 +10,7 @@
 //!                        Linux `$XDG_DATA_HOME` or `~/.local/share`, Windows `%LOCALAPPDATA%`)
 //!   `TRADINGSYSTEM_DIR`  the project folder (default: found by walking up from the binary, then from the current folder, to the folder holding
 //!                        `bot/Cargo.toml` and `crates/cli/Cargo.toml`)
-//! The folder names under it (`ClaudeMoomooBot`, `ClaudeMoomooBotArchive`) are the same on every OS.
+//! The folder name under it (`ClaudeMoomooBot`) is the same on every OS.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -111,19 +111,14 @@ pub fn app_dir() -> PathBuf {
     }
 }
 
-/// The bot's permanent store: `moomoo.sqlite3`, the backtest archives, the search records.
-pub fn bot_archive_dir() -> PathBuf {
-    app_dir().join("ClaudeMoomooBotArchive")
+/// The bot's persistent store.
+pub fn bot_data_dir() -> PathBuf {
+    app_dir().join("ClaudeMoomooBot")
 }
 
 /// The bot's database.
 pub fn bot_store_path() -> PathBuf {
-    bot_archive_dir().join("moomoo.sqlite3")
-}
-
-/// The bot's backtest archive.
-pub fn bot_backtest_archive_path() -> PathBuf {
-    bot_archive_dir().join("backtest_archive.sqlite3")
+    bot_data_dir().join("moomoo.sqlite3")
 }
 
 /// The bot's runtime folder: paper state, console state, logs, the warnings ledger.
@@ -708,7 +703,7 @@ mod tests {
                 app.ends_with(".local/share") || std::env::var_os("XDG_DATA_HOME").is_some()
             ),
         }
-        assert!(bot_store_path().ends_with("ClaudeMoomooBotArchive/moomoo.sqlite3"));
+        assert!(bot_store_path().ends_with("ClaudeMoomooBot/moomoo.sqlite3"));
         assert_eq!(
             exe("qwen-lab"),
             if os() == Os::Windows {

@@ -1,7 +1,7 @@
-//! Symbol translation list: how moomoo and Yahoo spell each symbol, whether the two verifiably refer to
+//! Symbol translation list: how moomoo and legacy provider spell each symbol, whether the two verifiably refer to
 //! the same security, and whether the live bot may trade it. Nothing is assumed: tradability comes from
-//! the bot's moomoo-verified universe, and the Yahoo match from measured price agreement or, where moomoo
-//! has no candles, Yahoo's returned symbol plus a company-name match.
+//! the bot's moomoo-verified universe, and the legacy provider match from measured price agreement or, where moomoo
+//! has no candles, legacy provider's returned symbol plus a company-name match.
 use anyhow::{Result, bail};
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use std::{
@@ -10,7 +10,7 @@ use std::{
     path::Path,
 };
 
-pub fn yahoo_symbol(ticker: &str) -> String {
+pub fn external_symbol(ticker: &str) -> String {
     ticker.replace('.', "-")
 }
 
@@ -89,8 +89,8 @@ fn name_words(s: &str) -> Vec<String> {
 }
 
 /// Company names agree when they share at least one significant word.
-pub fn names_match(moomoo: &str, yahoo: &str) -> bool {
-    let y = name_words(yahoo);
+pub fn names_match(moomoo: &str, external: &str) -> bool {
+    let y = name_words(external);
     name_words(moomoo).iter().any(|w| y.contains(w))
 }
 
@@ -159,12 +159,12 @@ pub fn seed_from_canonical_map(
         }
         let moomoo_symbol = &f[0];
         let moomoo_market = &f[1];
-        let yahoo_sym = &f[2];
+        let external_sym = &f[2];
         let name = &f[3];
         let bot_status = &f[4];
-        let yahoo_match = &f[5];
-        let yahoo_returned = (!f[6].is_empty()).then(|| f[6].clone());
-        let yahoo_name = (!f[7].is_empty()).then(|| f[7].clone());
+        let external_match = &f[5];
+        let external_returned = (!f[6].is_empty()).then(|| f[6].clone());
+        let external_name = (!f[7].is_empty()).then(|| f[7].clone());
         let overlap_bars: Option<i64> = f[8].parse().ok();
         let close_diff_median: Option<f64> = f[9].parse().ok();
         let close_diff_p99: Option<f64> = f[10].parse().ok();
@@ -181,22 +181,22 @@ pub fn seed_from_canonical_map(
             "canonical symbol map entry"
         };
         *counts
-            .entry(format!("{bot_status}/{yahoo_match}"))
+            .entry(format!("{bot_status}/{external_match}"))
             .or_default() += 1;
         tx.execute(
             "INSERT INTO symbols VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)",
             (
                 moomoo_symbol,
                 moomoo_market,
-                yahoo_sym,
+                external_sym,
                 name,
                 bot_status,
                 in_spy,
                 in_uni,
                 has_c,
-                yahoo_returned,
-                yahoo_name,
-                yahoo_match,
+                external_returned,
+                external_name,
+                external_match,
                 overlap_bars,
                 close_diff_median,
                 close_diff_p99,
@@ -211,7 +211,7 @@ pub fn seed_from_canonical_map(
 }
 
 /// Rebuilds the `symbols` table from the bot snapshot (read-only), the holdings file, and the
-/// Yahoo checks already stored by `reconcile` / `fetch-extra`. Falls back to the canonical
+/// legacy provider checks already stored by `reconcile` / `fetch-extra`. Falls back to the canonical
 /// `data/symbol_map.csv` when `bot_snapshot` is absent on a fresh installation.
 pub fn build(
     ours: &Connection,
@@ -249,7 +249,7 @@ pub fn build(
     };
     let checks: BTreeMap<String, Check> = {
         let mut st = ours.prepare(
-            "SELECT moomoo_symbol, yahoo_returned_symbol, yahoo_name, overlap_bars, close_diff_bps_median, close_diff_bps_p99, volume_ratio_median FROM source_checks")?;
+            "SELECT moomoo_symbol, external_returned_symbol, external_name, overlap_bars, close_diff_bps_median, close_diff_bps_p99, volume_ratio_median FROM source_checks")?;
         st.query_map([], |r| {
             Ok((
                 r.get::<_, String>(0)?,
@@ -288,7 +288,7 @@ pub fn build(
                 "not in the bot universe and no moomoo candles",
             )
         };
-        let ysym = yahoo_symbol(t);
+        let ysym = external_symbol(t);
         let name = names.get(t).cloned().unwrap_or_default();
         let c = checks.get(t);
         let returned_ok = c
@@ -302,7 +302,7 @@ pub fn build(
                 (Some(a), Some(b), Some(r)) if prices_match(c.overlap, a, b, r) => "verified",
                 _ => "mismatch",
             },
-            // No moomoo candles to compare prices with: Yahoo's symbol and company name must agree.
+            // No moomoo candles to compare prices with: legacy provider's symbol and company name must agree.
             Some(c) if c.name.as_deref().is_some_and(|n| names_match(&name, n)) => "verified_name",
             Some(_) => "unverified",
         };
@@ -334,21 +334,21 @@ pub fn build(
     Ok(counts)
 }
 
-/// Gate for anything that would reach the bot: every symbol must be `tradable` AND its Yahoo mapping
+/// Gate for anything that would reach the bot: every symbol must be `tradable` AND its legacy provider mapping
 /// must be verified. Returns the offending symbols with the reason.
 pub fn check_promotable(conn: &Connection, wanted: &[String]) -> Result<Vec<(String, String)>> {
     let mut bad = Vec::new();
     for t in wanted {
         let row: Option<(String, String)> = conn
             .query_row(
-                "SELECT bot_status, yahoo_match FROM symbols WHERE moomoo_symbol=?",
+                "SELECT bot_status, external_match FROM symbols WHERE moomoo_symbol=?",
                 [t],
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .optional()?;
         match row {
             Some((s, m)) if s == "tradable" && (m == "verified" || m == "verified_name") => {}
-            Some((s, m)) if s == "tradable" => bad.push((t.clone(), format!("yahoo_match {m}"))),
+            Some((s, m)) if s == "tradable" => bad.push((t.clone(), format!("external_match {m}"))),
             Some((s, _)) => bad.push((t.clone(), s)),
             None => bad.push((t.clone(), "research_only".to_string())),
         }
@@ -363,8 +363,8 @@ mod tests {
 
     #[test]
     fn spellings() {
-        assert_eq!(yahoo_symbol("BRK.B"), "BRK-B");
-        assert_eq!(yahoo_symbol("AAPL"), "AAPL");
+        assert_eq!(external_symbol("BRK.B"), "BRK-B");
+        assert_eq!(external_symbol("AAPL"), "AAPL");
         assert_eq!(MOOMOO_MARKET, "US(QotMarket=11)");
     }
 
@@ -428,9 +428,9 @@ mod tests {
         )
         .unwrap();
         assert_eq!(bad.len(), 4);
-        assert!(bad.contains(&("NEW".to_string(), "yahoo_match unverified".to_string())));
+        assert!(bad.contains(&("NEW".to_string(), "external_match unverified".to_string())));
         assert!(bad.contains(&("TSM".to_string(), "unverified".to_string())));
-        assert!(bad.contains(&("BAD".to_string(), "yahoo_match mismatch".to_string())));
+        assert!(bad.contains(&("BAD".to_string(), "external_match mismatch".to_string())));
         assert!(bad.contains(&("ZZZZ".to_string(), "research_only".to_string())));
         assert!(check_promotable(&c, &["AAPL".into()]).unwrap().is_empty());
     }

@@ -1,4 +1,4 @@
-//! Moving the whole system to another machine: `thomas bundle` packs the irreplaceable data (moomoo's candle quota is 100 stocks per 7 days and Yahoo reaches back
+//! Moving the whole system to another machine: `thomas bundle` packs the irreplaceable data (moomoo's candle quota is 100 stocks per 7 days and legacy provider reaches back
 //! only about 60 days, so the history cannot be fetched again), `thomas restore` unpacks it, and `thomas setup` runs every step from a fresh clone to a running system.
 //! The code and docs travel in git; the data travels as a bundle (a GitHub release asset of the private repository, or a file).
 use anyhow::{Context, Result, bail};
@@ -28,12 +28,6 @@ pub const PLAIN_FILES: [&str; 7] = [
     "papercompmoomoo/data/status.json",
     "papercompmoomoo/data/status.csv",
 ];
-/// The bot's own store folder (inside the project, `state/ClaudeMoomooBotArchive`): its candle store (the importer appends to it and `thomas snapshot` copies from
-/// it), its backtest archives and its per-interval parameter records. A new machine must start from the same history. Old `quarantine-*` folders are not carried.
-pub fn bot_archive() -> PathBuf {
-    moomoo_bot::platform::bot_archive_dir()
-}
-
 fn sh(cmd: &mut Command) -> Result<()> {
     let o = cmd
         .output()
@@ -99,15 +93,6 @@ fn safe_under(base: &Path, relative: &Path) -> Result<PathBuf> {
     Ok(candidate)
 }
 
-/// Whether `path` (which may not exist yet) lies inside `root`: the nearest existing ancestor is resolved (links followed) and must be inside.
-fn inside(root: &Path, path: &Path) -> Result<bool> {
-    let mut existing = path;
-    while !existing.exists() {
-        existing = existing.parent().context("path has no existing parent")?;
-    }
-    Ok(existing.canonicalize()?.starts_with(root))
-}
-
 fn extracted(tmp: &Path, relative: &Path) -> Result<PathBuf> {
     let root = tmp.canonicalize()?;
     let path = tmp.join(relative);
@@ -140,15 +125,9 @@ fn temp_dir(tag: &str) -> Result<PathBuf> {
     )
 }
 
-/// Writes `<out_dir>/thomas-data-<stamp>.tar.gz` holding data/ (the databases, the picks, the tuning results) and archive/ (every SQLite file in the bot's store
-/// folder `bot_archive`, when it exists). Returns the file.
-pub fn bundle(repo: &Path, out_dir: &Path, stamp: &str, bot_archive: &Path) -> Result<PathBuf> {
+/// Writes `<out_dir>/thomas-data-<stamp>.tar.gz` holding the production data files. Returns the file.
+pub fn bundle(repo: &Path, out_dir: &Path, stamp: &str) -> Result<PathBuf> {
     safe_stamp(stamp)?;
-    let repo_root = repo.canonicalize()?;
-    anyhow::ensure!(
-        inside(&repo_root, bot_archive)?,
-        "bot archive must be inside the project"
-    );
     anyhow::ensure!(
         repo.join(DB_FILES[0]).exists(),
         "{} does not exist: nothing to bundle",
@@ -170,15 +149,6 @@ pub fn bundle(repo: &Path, out_dir: &Path, stamp: &str, bot_archive: &Path) -> R
             std::fs::copy(&src, stage.join(f))?;
         }
     }
-    if bot_archive.is_dir() {
-        for e in std::fs::read_dir(bot_archive)? {
-            let e = e?;
-            let p = e.path();
-            if p.is_file() && p.extension().is_some_and(|x| x == "sqlite3") {
-                vacuum_into(&p, &stage.join("archive").join(e.file_name()))?;
-            }
-        }
-    }
     let out = out_dir.join(format!("thomas-data-{stamp}.tar.gz"));
     let r = sh(Command::new("tar")
         .arg("-czf")
@@ -191,19 +161,9 @@ pub fn bundle(repo: &Path, out_dir: &Path, stamp: &str, bot_archive: &Path) -> R
     Ok(out)
 }
 
-/// Unpacks a bundle into `repo` (and the bot's store files into the folder `bot_archive`). Every database is integrity-checked before anything is put in place, and nothing that
+/// Unpacks a production data bundle into `repo`. Every database is integrity-checked before anything is put in place, and nothing that
 /// exists is overwritten unless `force`. Returns the files placed.
-pub fn restore(
-    repo: &Path,
-    tarball: &Path,
-    bot_archive: &Path,
-    force: bool,
-) -> Result<Vec<String>> {
-    let repo_root = repo.canonicalize()?;
-    anyhow::ensure!(
-        inside(&repo_root, bot_archive)?,
-        "bot archive must be inside the project"
-    );
+pub fn restore(repo: &Path, tarball: &Path, force: bool) -> Result<Vec<String>> {
     let tmp = temp_dir("restore")?;
     let result = (|| -> Result<Vec<String>> {
         sh(Command::new("tar")
@@ -219,22 +179,6 @@ pub fn restore(
                     extracted(&tmp, Path::new(f))?,
                     safe_under(repo, Path::new(f))?,
                 ));
-            }
-        }
-        if tmp.join("archive").is_dir() {
-            let archive = extracted(&tmp, Path::new("archive"))?;
-            std::fs::create_dir_all(bot_archive)?;
-            for e in std::fs::read_dir(archive)? {
-                let e = e?;
-                let p = e.path();
-                if p.is_file() && p.extension().is_some_and(|x| x == "sqlite3") {
-                    let name = e.file_name();
-                    let relative = Path::new("archive").join(&name);
-                    moves.push((
-                        extracted(&tmp, &relative)?,
-                        safe_under(bot_archive, Path::new(&name))?,
-                    ));
-                }
             }
         }
         anyhow::ensure!(
@@ -370,7 +314,7 @@ fn run_in(dir: &Path, cmd: &str, args: &[&str]) -> Result<()> {
 /// Every step from a fresh clone to the running system, in order. `bundle` is a data bundle file; without it the newest release of this repository is used.
 pub fn setup_steps(repo: &Path, bundle: Option<PathBuf>) -> Vec<SetupStep> {
     let r = repo.to_path_buf();
-    let (r2, r3, r4, r5, r6) = (r.clone(), r.clone(), r.clone(), r.clone(), r.clone());
+    let (r2, r3, r4, r6) = (r.clone(), r.clone(), r.clone(), r.clone());
     let mut steps = vec![
         SetupStep {
             name: "tools (cargo, git)",
@@ -413,7 +357,7 @@ pub fn setup_steps(repo: &Path, bundle: Option<PathBuf>) -> Vec<SetupStep> {
             }),
         },
         SetupStep {
-            name: "data (databases, picks, the bot's candle store)",
+            name: "data (production databases and picks)",
             done: Box::new({
                 let r = r2.clone();
                 move || r.join(DB_FILES[0]).exists()
@@ -423,7 +367,7 @@ pub fn setup_steps(repo: &Path, bundle: Option<PathBuf>) -> Vec<SetupStep> {
                     Some(f) => f.clone(),
                     None => download_latest(&r2, &r2.join("data/bundles"))?,
                 };
-                let placed = restore(&r2, &file, &bot_archive(), false)?;
+                let placed = restore(&r2, &file, false)?;
                 Ok(format!("{} files placed", placed.len()))
             }),
         },
@@ -525,17 +469,11 @@ pub fn setup_steps(repo: &Path, bundle: Option<PathBuf>) -> Vec<SetupStep> {
             }),
         },
         SetupStep {
-            name: "build (thomas, bot-ops)",
+            name: "build (thomas)",
             done: Box::new(|| false),
             run: Box::new(move || {
                 run_in(&r3, "cargo", &["build", "--release"])?;
-                run_in(
-                    &r3.join("bot"),
-                    "cargo",
-                    &["build", "--release", "--bin", "bot-ops"],
-                )?;
                 if cfg!(target_os = "macos") {
-                    // a stable identifier keeps the firewall from asking again after every rebuild
                     run_in(
                         &r3,
                         "codesign",
@@ -546,18 +484,6 @@ pub fn setup_steps(repo: &Path, bundle: Option<PathBuf>) -> Vec<SetupStep> {
                             "-i",
                             "com.thomasai.thomas",
                             "target/release/thomas",
-                        ],
-                    )?;
-                    run_in(
-                        &r3.join("bot"),
-                        "codesign",
-                        &[
-                            "-f",
-                            "-s",
-                            "-",
-                            "-i",
-                            "claude-moomoo-bot",
-                            "target/release/bot-ops",
                         ],
                     )?;
                 }
@@ -576,34 +502,6 @@ pub fn setup_steps(repo: &Path, bundle: Option<PathBuf>) -> Vec<SetupStep> {
             }),
         },
         SetupStep {
-            name: "bot candle importer (needs moomoo OpenD, logged in)",
-            done: Box::new(|| crate::ops::agent_installed("com.claudemoomoobot.universefetch")),
-            run: Box::new(move || {
-                let opend = if cfg!(target_os = "linux") {
-                    [
-                        PathBuf::from("/usr/local/bin/moomoo-opend-gui"),
-                        crate::ops::expand_tilde(Path::new("~/.com.moomoo.OpenD")),
-                    ]
-                    .into_iter()
-                    .find(|p| p.exists())
-                    .unwrap_or_else(|| PathBuf::from("/usr/local/bin/moomoo-opend-gui"))
-                } else {
-                    crate::ops::expand_tilde(Path::new("~/Applications/moomoo_OpenD.app"))
-                };
-                anyhow::ensure!(
-                    opend.exists(),
-                    "moomoo OpenD is not installed at {}: install version 10.11.7108 (see versions.lock), log in with your moomoo account, then run `thomas setup` again",
-                    opend.display()
-                );
-                run_in(
-                    &r5.join("bot"),
-                    "target/release/bot-ops",
-                    &["install-fetch"],
-                )?;
-                Ok("installed".into())
-            }),
-        },
-        SetupStep {
             name: "verify the data",
             done: Box::new(|| false),
             run: Box::new(move || {
@@ -618,12 +516,11 @@ pub fn setup_steps(repo: &Path, bundle: Option<PathBuf>) -> Vec<SetupStep> {
             "git hooks",
             "build",
             "data",
-            "scheduled jobs",
             "sibling project",
             "sibling environment",
             "moomoo SDK",
-            "bot candle importer",
             "verify",
+            "scheduled",
         ]
         .iter()
         .position(|p| n.starts_with(p))
@@ -676,7 +573,7 @@ mod tests {
     }
 
     #[test]
-    fn a_bundle_round_trips_the_databases_and_refuses_to_overwrite_without_force() {
+    fn a_bundle_round_trips_production_databases_and_refuses_to_overwrite_without_force() {
         let (a, b) = (temp("a"), temp("b"));
         {
             let c = thomas_core::store::open(&a.join("data/thomas.sqlite3")).unwrap();
@@ -687,28 +584,13 @@ mod tests {
             .unwrap();
         }
         std::fs::write(a.join("data/selection.json"), "{\"symbols\":[\"AAPL\"]}").unwrap();
-        let arch = a.join("bot-store");
-        std::fs::create_dir_all(arch.join("quarantine-old")).unwrap();
-        Connection::open(arch.join("moomoo.sqlite3"))
-            .unwrap()
-            .execute_batch("CREATE TABLE k(v); INSERT INTO k VALUES(7);")
-            .unwrap();
-        Connection::open(arch.join("backtest_archive.sqlite3"))
-            .unwrap()
-            .execute_batch("CREATE TABLE k(v); INSERT INTO k VALUES(8);")
-            .unwrap();
-        Connection::open(arch.join("quarantine-old/old.sqlite3"))
-            .unwrap()
-            .execute_batch("CREATE TABLE k(v);")
-            .unwrap();
-        let tar = bundle(&a, &a.join("out"), "t1", &arch).unwrap();
+        let tar = bundle(&a, &a.join("out"), "t1").unwrap();
         assert!(
             tar.exists() && !a.join("out/stage-t1").exists(),
             "the staging folder is cleaned up"
         );
-        let b_arch = b.join("restored-store");
-        let placed = restore(&b, &tar, &b_arch, false).unwrap();
-        assert!(placed.len() >= 3, "{placed:?}");
+        let placed = restore(&b, &tar, false).unwrap();
+        assert!(placed.len() >= 2, "{placed:?}");
         let c = Connection::open(b.join("data/thomas.sqlite3")).unwrap();
         let n: i64 = c
             .query_row("SELECT count(*) FROM import_state", [], |r| r.get(0))
@@ -718,24 +600,9 @@ mod tests {
             std::fs::read_to_string(b.join("data/selection.json")).unwrap(),
             "{\"symbols\":[\"AAPL\"]}"
         );
-        let v = |f: &str| -> i64 {
-            Connection::open(b_arch.join(f))
-                .unwrap()
-                .query_row("SELECT v FROM k", [], |r| r.get(0))
-                .unwrap()
-        };
-        assert_eq!(
-            (v("moomoo.sqlite3"), v("backtest_archive.sqlite3")),
-            (7, 8),
-            "the bot's candle store and backtest archive come along"
-        );
-        assert!(
-            !b_arch.join("quarantine-old").exists() && !b_arch.join("old.sqlite3").exists(),
-            "quarantine folders stay behind"
-        );
-        let e = restore(&b, &tar, &b_arch, false).unwrap_err();
+        let e = restore(&b, &tar, false).unwrap_err();
         assert!(format!("{e}").contains("refusing to overwrite"), "{e}");
-        assert!(restore(&b, &tar, &b_arch, true).is_ok());
+        assert!(restore(&b, &tar, true).is_ok());
         let _ = (std::fs::remove_dir_all(&a), std::fs::remove_dir_all(&b));
     }
 
@@ -743,10 +610,10 @@ mod tests {
     fn a_damaged_or_empty_bundle_is_refused_before_anything_is_placed() {
         let (a, b) = (temp("c"), temp("d"));
         std::fs::write(a.join("junk.tar.gz"), b"not a tarball").unwrap();
-        assert!(restore(&b, &a.join("junk.tar.gz"), &b.join("arch"), false).is_err());
+        assert!(restore(&b, &a.join("junk.tar.gz"), false).is_err());
         assert!(!b.join("data/thomas.sqlite3").exists());
         assert!(
-            bundle(&b, &b.join("out"), "x", &b.join("none")).is_err(),
+            bundle(&b, &b.join("out"), "x").is_err(),
             "no thomas.sqlite3, nothing to bundle"
         );
         let _ = (std::fs::remove_dir_all(&a), std::fs::remove_dir_all(&b));
@@ -758,18 +625,17 @@ mod tests {
             .iter()
             .map(|s| s.name)
             .collect();
-        assert_eq!(names.len(), 10);
+        assert_eq!(names.len(), 9);
         let order = [
             "tools",
             "git hooks",
             "build",
             "data",
-            "scheduled jobs",
             "sibling project",
             "sibling environment",
             "moomoo SDK",
-            "bot candle importer",
             "verify",
+            "scheduled",
         ];
         for (n, want) in names.iter().zip(order) {
             assert!(n.starts_with(want), "{n} should start with {want}");
@@ -800,21 +666,9 @@ mod tests {
     }
 
     #[test]
-    fn a_state_folder_that_does_not_exist_yet_is_inside_the_project_but_a_foreign_one_is_not() {
-        let a = temp("inside");
-        let root = a.canonicalize().unwrap();
-        assert!(
-            inside(&root, &a.join("state/ClaudeMoomooBotArchive")).unwrap(),
-            "a fresh clone has no state/ folder yet"
-        );
-        assert!(!inside(&root, &std::env::temp_dir().join("elsewhere-never-created")).unwrap());
-        let _ = std::fs::remove_dir_all(a);
-    }
-
-    #[test]
     fn bundle_stamps_cannot_escape_the_output_directory() {
         let (a, _) = (temp("stamp"), temp("stamp-unused"));
-        let err = bundle(&a, &a.join("out"), "../outside", &a.join("bot-store"))
+        let err = bundle(&a, &a.join("out"), "../outside")
             .unwrap_err()
             .to_string();
         assert!(err.contains("stamp"));

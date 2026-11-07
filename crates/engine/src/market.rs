@@ -1,6 +1,6 @@
 //! Builds the bot's `Market` from the stored candle snapshot, following the bot's own pipeline
 //! (examples/common/mod.rs `load_data` + `big_market`) so ThomasAi tests exactly what the bot would.
-//! Data: the merged base (`thomas merge`): moomoo candles, with Yahoo bars only where moomoo has none (Yahoo turnover is an estimate, flagged in the table).
+//! Data: the merged base (`thomas merge`): moomoo candles, with legacy provider bars only where moomoo has none (legacy provider turnover is an estimate, flagged in the table).
 use anyhow::{Context, Result, ensure};
 use moomoo_bot::engine::moomoo::{
     Sessions, SymbolData, build_market, liquidity_from_bars, load_holdings,
@@ -54,7 +54,7 @@ pub fn load_symbol_data(snapshot: &Path, store: &Path, holdings: &Path) -> Resul
 
     out.timings.push(("rules", lap.elapsed()));
     lap = std::time::Instant::now();
-    // The merged base (thomas merge): moomoo bars, Yahoo only where moomoo lacks a real bar; placeholders are already out.
+    // The merged base (thomas merge): moomoo bars, legacy provider only where moomoo lacks a real bar; placeholders are already out.
     let ours = Connection::open_with_flags(store, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     let mut bars: BTreeMap<String, BTreeMap<i64, Bar>> = BTreeMap::new();
     let mut st = ours.prepare("SELECT moomoo_symbol, wall_ms, open, high, low, close, volume, turnover FROM candles_merged")?;
@@ -186,7 +186,7 @@ pub fn apply_window(l: &mut Loaded, window: usize) -> Option<i64> {
 }
 
 /// Session list from the market-wide calendar: bar times at which at least half of the symbols already listed at that time have a bar.
-/// (Counting all symbols would drop every time before the latest listings, e.g. before the Yahoo-only symbols start.)
+/// (Counting all symbols would drop every time before the latest listings, e.g. before the legacy provider-only symbols start.)
 pub fn calendar_sessions(data: &[SymbolData]) -> Vec<(i64, i64)> {
     let mut count: BTreeMap<i64, usize> = BTreeMap::new();
     for d in data {

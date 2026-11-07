@@ -49,7 +49,7 @@ def detect_market_regime(common_db_path: Path | None = None) -> tuple[str, Strat
 @dataclass(frozen=True)
 class TargetCandidate:
     moomoo_symbol: str
-    yahoo_symbol: str
+    external_symbol: str
     rank: int
     score: float
     weight: float
@@ -72,11 +72,11 @@ def select_alpha_candidates(
     if mode == StrategyMode.RANK_1_ALPHA_ENGINE:
         for c in sorted_cands:
             if c.get("rank") == 1:
-                sym = c.get("yahoo_symbol", "")
+                sym = c.get("external_symbol", "")
                 tp, sl, staged = get_symbol_optimal_bracket(sym)
                 targets.append(TargetCandidate(
                     moomoo_symbol=c.get("moomoo_symbol", ""),
-                    yahoo_symbol=sym,
+                    external_symbol=sym,
                     rank=1,
                     score=float(c.get("score", 0.0)),
                     weight=1.0,
@@ -90,11 +90,11 @@ def select_alpha_candidates(
     elif mode == StrategyMode.STAGED_SCALE_OUT:
         for c in sorted_cands:
             if c.get("rank") == 1:
-                sym = c.get("yahoo_symbol", "")
+                sym = c.get("external_symbol", "")
                 tp, sl, staged = get_symbol_optimal_bracket(sym)
                 targets.append(TargetCandidate(
                     moomoo_symbol=c.get("moomoo_symbol", ""),
-                    yahoo_symbol=sym,
+                    external_symbol=sym,
                     rank=1,
                     score=float(c.get("score", 0.0)),
                     weight=1.0,
@@ -117,11 +117,11 @@ def select_alpha_candidates(
         
         tot_w = sum(w for _, w in selected) if selected else 1.0
         for c, w in selected:
-            sym = c.get("yahoo_symbol", "")
+            sym = c.get("external_symbol", "")
             tp, sl, staged = get_symbol_optimal_bracket(sym)
             targets.append(TargetCandidate(
                 moomoo_symbol=c.get("moomoo_symbol", ""),
-                yahoo_symbol=sym,
+                external_symbol=sym,
                 rank=c.get("rank", 999),
                 score=float(c.get("score", 0.0)),
                 weight=round(w / tot_w, 4),
@@ -151,11 +151,11 @@ def select_alpha_candidates(
 
         tot_w = sum(w for _, w in selected) if selected else 1.0
         for c, w in selected:
-            sym = c.get("yahoo_symbol", "")
+            sym = c.get("external_symbol", "")
             tp, sl, staged = get_symbol_optimal_bracket(sym)
             targets.append(TargetCandidate(
                 moomoo_symbol=c.get("moomoo_symbol", ""),
-                yahoo_symbol=sym,
+                external_symbol=sym,
                 rank=c.get("rank", 999),
                 score=float(c.get("score", 0.0)),
                 weight=round(w / tot_w, 4),

@@ -10,6 +10,38 @@ import research_replay as replay
 
 
 class ExitGridReplay(unittest.TestCase):
+    def test_synthetic_gex_uses_only_prior_bars(self):
+        engine = replay.CausalSyntheticGEX(strike_step=5.0, half_life_bars=45, warmup_bars=1)
+        self.assertEqual(engine.state(0, 100.0)["regime"], "WARMUP")
+        engine.observe(0, 100.0, 100.0, 100.0, 100.0)
+        before_current_bar = engine.state(1, 100.0)
+        self.assertEqual(before_current_bar["regime"], "POSITIVE_GAMMA")
+        self.assertAlmostEqual(before_current_bar["gamma_flip"], 100.0)
+        self.assertEqual(before_current_bar["call_wall"], 105.0)
+
+    def test_gex_regime_flip_is_a_defensive_exit(self):
+        ny = ZoneInfo("America/New_York")
+        opened = int(datetime(2026, 11, 6, 10, 21, tzinfo=ny).timestamp() * 1000)
+        trade = {"entry": 100.0, "initial_stop": 95.0, "initial_target": 110.0,
+                 "trail_pct": 5.0, "opened_ms": opened, "session": "2026-11-06", "symbol": "XYZ"}
+        bars = [(opened - (20 - i) * 60_000, 100.0, 101.0, 99.0, 100.0, 1_000.0) for i in range(20)]
+        bars += [(opened, 100.0, 101.0, 99.0, 100.0, 1_000.0),
+                 (opened + 60_000, 95.0, 96.0, 94.0, 94.0, 1_000.0)]
+        result = replay.replay_position(trade, bars, 10.0, grid_config={"gex_stop_buffer": 0.20})
+        self.assertEqual(result["replay_reason"], "gex_regime_flip")
+        self.assertEqual(result["replay_exit"], 94.0)
+
+    def test_candidate_replay_enters_on_next_open_and_exits_causally(self):
+        ny = ZoneInfo("America/New_York")
+        first = int(datetime(2026, 11, 6, 10, 0, tzinfo=ny).timestamp() * 1000)
+        bars = [(first + i * 60_000, 100.0, 101.0, 99.0, 100.0, 1_000.0) for i in range(20)]
+        bars += [(first + 20 * 60_000, 100.0, 108.0, 100.0, 107.0, 1_000.0),
+                 (first + 21 * 60_000, 106.0, 107.0, 99.0, 99.0, 1_000.0)]
+        result = replay.replay_candidate_entry_exit("XYZ", bars, first)
+        self.assertEqual(result["status"], "entry_exit_replayed")
+        self.assertEqual(result["entry_price"], 106.0)
+        self.assertEqual(result["exit_reason"], "gex_regime_flip")
+
     def test_randomized_candidates_are_10000_unique_repeatable_and_include_the_live_baseline(self):
         as_of = 1_794_000_000_000
         a = replay.random_grid_candidates("2026-11-06", as_of)

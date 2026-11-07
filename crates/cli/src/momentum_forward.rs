@@ -25,7 +25,7 @@ fn schema(db: &Connection) -> Result<()> {
     db.execute_batch(
         "CREATE TABLE IF NOT EXISTS momentum_forward_candidates(
            session TEXT NOT NULL, built_ms INTEGER NOT NULL, cutoff_day INTEGER NOT NULL,
-           strategy TEXT NOT NULL, moomoo_symbol TEXT NOT NULL, yahoo_symbol TEXT NOT NULL,
+           strategy TEXT NOT NULL, moomoo_symbol TEXT NOT NULL, external_symbol TEXT NOT NULL,
            rank INTEGER NOT NULL, score REAL NOT NULL, observations INTEGER NOT NULL,
            bars INTEGER NOT NULL, gross_return_pct REAL, net_return_pct REAL,
            actual_trades INTEGER NOT NULL, actual_pnl_pct REAL, actual_reason TEXT,
@@ -55,7 +55,7 @@ fn schema(db: &Connection) -> Result<()> {
 
 fn session_prices(
     candles: &Connection,
-    yahoo: &str,
+    external: &str,
     session: &str,
 ) -> Result<(i64, Option<f64>, Option<f64>, bool)> {
     let has_hl: bool = candles
@@ -69,7 +69,7 @@ fn session_prices(
         let mut q = candles.prepare(
             "SELECT ts,open,high,low,close FROM bars WHERE symbol=? AND date(ts/1000,'unixepoch')=? ORDER BY ts",
         )?;
-        q.query_map(params![yahoo, session], |r| {
+        q.query_map(params![external, session], |r| {
             Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
         })?
         .collect::<rusqlite::Result<_>>()?
@@ -77,7 +77,7 @@ fn session_prices(
         let mut q = candles.prepare(
             "SELECT ts,open,close FROM bars WHERE symbol=? AND date(ts/1000,'unixepoch')=? ORDER BY ts",
         )?;
-        q.query_map(params![yahoo, session], |r| {
+        q.query_map(params![external, session], |r| {
             let (ts, open, close): (i64, f64, f64) = (r.get(0)?, r.get(1)?, r.get(2)?);
             Ok((ts, open, open.max(close), open.min(close), close))
         })?
@@ -85,7 +85,7 @@ fn session_prices(
     };
     let later: bool = candles.query_row(
         "SELECT EXISTS(SELECT 1 FROM bars WHERE symbol=? AND date(ts/1000,'unixepoch')>?)",
-        params![yahoo, session],
+        params![external, session],
         |r| r.get(0),
     )?;
     let complete = rows
@@ -198,7 +198,7 @@ pub fn run(
                 continue;
             }
             let moomoo = moomoo_code.strip_prefix("US.").unwrap_or(&moomoo_code);
-            let yahoo = aliases
+            let external = aliases
                 .get(moomoo)
                 .context("candidate is absent from canonical symbol map")?;
             let rank = detail["rank"]
@@ -221,7 +221,7 @@ pub fn run(
                     "momentum candidate does not have 20 observations"
                 );
             }
-            let (bars, first, last, done) = session_prices(&candles, yahoo, &session)?;
+            let (bars, first, last, done) = session_prices(&candles, external, &session)?;
             let gross = first
                 .zip(last)
                 .filter(|_| done)
@@ -234,10 +234,10 @@ pub fn run(
             run_actual_n += actual_n;
             run_actual += actual_pnl.unwrap_or(0.0);
             tx.execute(
-                "INSERT INTO momentum_forward_candidates(session,built_ms,cutoff_day,strategy,moomoo_symbol,yahoo_symbol,rank,score,observations,bars,gross_return_pct,net_return_pct,actual_trades,actual_pnl_pct,actual_reason,outcome_complete,updated_ms)
+                "INSERT INTO momentum_forward_candidates(session,built_ms,cutoff_day,strategy,moomoo_symbol,external_symbol,rank,score,observations,bars,gross_return_pct,net_return_pct,actual_trades,actual_pnl_pct,actual_reason,outcome_complete,updated_ms)
                  VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                  ON CONFLICT(session,moomoo_symbol) DO UPDATE SET bars=excluded.bars,gross_return_pct=excluded.gross_return_pct,net_return_pct=excluded.net_return_pct,actual_trades=excluded.actual_trades,actual_pnl_pct=excluded.actual_pnl_pct,actual_reason=excluded.actual_reason,outcome_complete=excluded.outcome_complete,updated_ms=excluded.updated_ms",
-                params![session,built_ms,cutoff,detail["strategy"].as_str().unwrap_or(STRATEGY),moomoo_code,yahoo,rank,score,observations,bars,gross,net_pct,actual_n,actual_pnl,reason,done as i64,now_ms],
+                params![session,built_ms,cutoff,detail["strategy"].as_str().unwrap_or(STRATEGY),moomoo_code,external,rank,score,observations,bars,gross,net_pct,actual_n,actual_pnl,reason,done as i64,now_ms],
             )?;
             imported += 1;
             completed += i64::from(done);
@@ -302,7 +302,7 @@ mod tests {
         let map_path = dir.path().join("map.csv");
         std::fs::write(
             &map_path,
-            "moomoo_symbol,market,yahoo_symbol\nBRK.B,US,BRK-B\n",
+            "moomoo_symbol,market,external_symbol\nBRK.B,US,BRK-B\n",
         )
         .unwrap();
         let journal = Connection::open(&journal_path).unwrap();
@@ -339,7 +339,7 @@ mod tests {
         )
         .unwrap();
         let store = Connection::open(store_path).unwrap();
-        let row: (String,f64,f64,i64) = store.query_row("SELECT yahoo_symbol,gross_return_pct,net_return_pct,actual_trades FROM momentum_forward_candidates", [], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?))).unwrap();
+        let row: (String,f64,f64,i64) = store.query_row("SELECT external_symbol,gross_return_pct,net_return_pct,actual_trades FROM momentum_forward_candidates", [], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?))).unwrap();
         assert_eq!(row.0, "BRK-B");
         assert!((row.1 - 2.0).abs() < 1e-9);
         assert!((row.2 - 1.9).abs() < 1e-9);

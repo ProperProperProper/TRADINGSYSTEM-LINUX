@@ -1,4 +1,4 @@
-moomoo_symbol,moomoo_market,yahoo_symbol,name,bot_status,yahoo_match,yahoo_returned_symbol,yahoo_name,overlap_bars,close_diff_bps_median,close_diff_bps_p99,volume_ratio_median,moomoo_bars,yahoo_filled_bars,gap_bars,yahoo_extra_bars
+moomoo_symbol,moomoo_market,external_symbol,name,bot_status,external_match,external_returned_symbol,external_name,overlap_bars,close_diff_bps_median,close_diff_bps_p99,volume_ratio_median,moomoo_bars,external_filled_bars,gap_bars,external_extra_bars
 A,US(QotMarket=11),A,Agilent Technologies,tradable,verified_name,A,"Agilent Technologies, Inc.",0,,,,,,,1041
 AAPL,US(QotMarket=11),AAPL,Apple,tradable,verified,AAPL,Apple Inc.,962,0.0003,2.6388,1.0000,2496,0,0,0
 ABBV,US(QotMarket=11),ABBV,AbbVie,tradable,verified,ABBV,AbbVie Inc.,962,0.0003,4.1462,1.0000,2496,0,0,0

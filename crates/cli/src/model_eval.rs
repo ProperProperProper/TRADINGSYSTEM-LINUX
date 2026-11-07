@@ -18,7 +18,7 @@ struct Event {
     built_ms: i64,
     cutoff_day: i64,
     moomoo: String,
-    yahoo: String,
+    external: String,
     rank: i64,
     score: f64,
     observations: i64,
@@ -44,7 +44,7 @@ fn load(root: &Path, completed_only: bool) -> Result<Vec<Event>> {
     } else {
         ""
     };
-    let mut q = db.prepare(&format!("SELECT session,built_ms,cutoff_day,moomoo_symbol,yahoo_symbol,rank,score,observations,net_return_pct FROM momentum_forward_candidates{condition} ORDER BY session,rank"))
+    let mut q = db.prepare(&format!("SELECT session,built_ms,cutoff_day,moomoo_symbol,external_symbol,rank,score,observations,net_return_pct FROM momentum_forward_candidates{condition} ORDER BY session,rank"))
         .context("momentum forward tables are absent; run thomas momentum-forward first")?;
     let rows = q
         .query_map([], |r| {
@@ -53,7 +53,7 @@ fn load(root: &Path, completed_only: bool) -> Result<Vec<Event>> {
                 built_ms: r.get(1)?,
                 cutoff_day: r.get(2)?,
                 moomoo: r.get(3)?,
-                yahoo: r.get(4)?,
+                external: r.get(4)?,
                 rank: r.get(5)?,
                 score: r.get(6)?,
                 observations: r.get(7)?,
@@ -92,7 +92,7 @@ pub fn events(root: &Path, output: &Path) -> Result<String> {
         writeln!(
             file,
             "{}",
-            json!({"schema":1,"strategy":STRATEGY_VERSION,"session":e.session,"signal_ts_ms":e.built_ms,"symbol":{"moomoo":e.moomoo,"yahoo":e.yahoo},"rank":e.rank,"score":e.score,"observations":e.observations,"data_cutoff":e.cutoff_day.to_string()})
+            json!({"schema":1,"strategy":STRATEGY_VERSION,"session":e.session,"signal_ts_ms":e.built_ms,"symbol":{"moomoo":e.moomoo,"external":e.external},"rank":e.rank,"score":e.score,"observations":e.observations,"data_cutoff":e.cutoff_day.to_string()})
         )?;
     }
     Ok(format!(
@@ -164,13 +164,13 @@ pub fn run(
     );
     let by_key: HashMap<(&str, i64), &Event> = events
         .iter()
-        .map(|e| ((e.yahoo.as_str(), e.built_ms), e))
+        .map(|e| ((e.external.as_str(), e.built_ms), e))
         .collect();
     let mut seen = HashSet::new();
     let mut selected_sessions = HashSet::new();
     for d in &decisions {
         let event = by_key
-            .get(&(d.symbol.yahoo.as_str(), d.signal_ts_ms))
+            .get(&(d.symbol.external.as_str(), d.signal_ts_ms))
             .context("decision does not match a completed frozen momentum candidate")?;
         ensure!(
             d.symbol.moomoo == event.moomoo,
@@ -181,7 +181,7 @@ pub fn run(
             "decision cutoff does not match its frozen selection"
         );
         ensure!(
-            seen.insert((d.symbol.yahoo.as_str(), d.signal_ts_ms)),
+            seen.insert((d.symbol.external.as_str(), d.signal_ts_ms)),
             "duplicate momentum decision"
         );
         selected_sessions.insert(event.session.as_str());
@@ -200,12 +200,12 @@ pub fn run(
     let entered: HashSet<_> = decisions
         .iter()
         .filter(|d| d.decision == Decision::Enter)
-        .map(|d| (d.symbol.yahoo.as_str(), d.signal_ts_ms))
+        .map(|d| (d.symbol.external.as_str(), d.signal_ts_ms))
         .collect();
     let candidate_events: Vec<_> = base_events
         .iter()
         .copied()
-        .filter(|e| entered.contains(&(e.yahoo.as_str(), e.built_ms)))
+        .filter(|e| entered.contains(&(e.external.as_str(), e.built_ms)))
         .collect();
     let base = metrics(&base_events);
     let candidate = metrics(&candidate_events);
@@ -240,14 +240,14 @@ fn persist(
     now_ms: i64,
 ) -> Result<()> {
     let mut db = rusqlite::Connection::open(store_path(root))?;
-    db.execute_batch("CREATE TABLE IF NOT EXISTS model_evaluation_runs(id INTEGER PRIMARY KEY,created_ms INTEGER NOT NULL,source TEXT NOT NULL,data_cutoff TEXT NOT NULL,strategy_version TEXT NOT NULL,rust_command TEXT NOT NULL,evaluation_json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS model_decisions(id INTEGER PRIMARY KEY,run_id INTEGER NOT NULL REFERENCES model_evaluation_runs(id),signal_ts_ms INTEGER NOT NULL,yahoo_symbol TEXT NOT NULL,decision TEXT NOT NULL,confidence REAL NOT NULL,raw_json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS model_decision_outcomes(decision_id INTEGER PRIMARY KEY REFERENCES model_decisions(id),deterministic_eligible INTEGER NOT NULL,agreement INTEGER NOT NULL,outcome_pct REAL,exit_reason TEXT,evaluated_ms INTEGER NOT NULL);")?;
+    db.execute_batch("CREATE TABLE IF NOT EXISTS model_evaluation_runs(id INTEGER PRIMARY KEY,created_ms INTEGER NOT NULL,source TEXT NOT NULL,data_cutoff TEXT NOT NULL,strategy_version TEXT NOT NULL,rust_command TEXT NOT NULL,evaluation_json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS model_decisions(id INTEGER PRIMARY KEY,run_id INTEGER NOT NULL REFERENCES model_evaluation_runs(id),signal_ts_ms INTEGER NOT NULL,external_symbol TEXT NOT NULL,decision TEXT NOT NULL,confidence REAL NOT NULL,raw_json TEXT NOT NULL); CREATE TABLE IF NOT EXISTS model_decision_outcomes(decision_id INTEGER PRIMARY KEY REFERENCES model_decisions(id),deterministic_eligible INTEGER NOT NULL,agreement INTEGER NOT NULL,outcome_pct REAL,exit_reason TEXT,evaluated_ms INTEGER NOT NULL);")?;
     let tx = db.transaction()?;
     tx.execute("INSERT INTO model_evaluation_runs(created_ms,source,data_cutoff,strategy_version,rust_command,evaluation_json) VALUES(?,?,?,?,?,?)", rusqlite::params![now_ms,document["source"].as_str().unwrap_or(""),document["data_cutoff"].as_str().unwrap_or(""),STRATEGY_VERSION,document["rust_command"].as_str().unwrap_or(""),serde_json::to_string(document)?])?;
     let run_id = tx.last_insert_rowid();
     for (decision, line) in decisions.iter().zip(raw) {
-        tx.execute("INSERT INTO model_decisions(run_id,signal_ts_ms,yahoo_symbol,decision,confidence,raw_json) VALUES(?,?,?,?,?,?)", rusqlite::params![run_id,decision.signal_ts_ms,decision.symbol.yahoo,format!("{:?}",decision.decision).to_lowercase(),decision.confidence,line])?;
+        tx.execute("INSERT INTO model_decisions(run_id,signal_ts_ms,external_symbol,decision,confidence,raw_json) VALUES(?,?,?,?,?,?)", rusqlite::params![run_id,decision.signal_ts_ms,decision.symbol.external,format!("{:?}",decision.decision).to_lowercase(),decision.confidence,line])?;
         let id = tx.last_insert_rowid();
-        let event = events[&(decision.symbol.yahoo.as_str(), decision.signal_ts_ms)];
+        let event = events[&(decision.symbol.external.as_str(), decision.signal_ts_ms)];
         tx.execute("INSERT INTO model_decision_outcomes(decision_id,deterministic_eligible,agreement,outcome_pct,exit_reason,evaluated_ms) VALUES(?,1,?,?,?,?)", rusqlite::params![id,(decision.decision==Decision::Enter) as i64,event.outcome,"next-session close after costs",now_ms])?;
     }
     tx.commit()?;
@@ -273,7 +273,7 @@ fn corpus_rows(root: &Path, from_shadow: bool) -> Result<Vec<(String, Value)>> {
         let enter = outcome > 0.0;
         let answer = json!({"schema":1,"decision":if enter{"enter"}else{"abstain"},"confidence":if enter{1.0}else{0.0},"reason":"Rust-scored next-session outcome after costs"}).to_string();
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        format!("{}:{}:{}", event.session, event.yahoo, event.built_ms).hash(&mut hasher);
+        format!("{}:{}:{}", event.session, event.external, event.built_ms).hash(&mut hasher);
         rows.push((event.session.clone(),json!({"messages":[{"role":"user","content":prompt(&event)},{"role":"assistant","content":answer}],"source":{"brain_ids":[brain],"board_ids":[],"data_cutoff":event.cutoff_day.to_string(),"strategy_version":STRATEGY_VERSION,"source_hash":format!("{:016x}",hasher.finish()),"source":"rust","via":if from_shadow{"momentum_shadow_outcome"}else{"momentum_forward_outcome"},"topic":"momentum_decision"},"label":{"status":"accepted","evidence":"real next-session close after costs; outcome excluded from prompt","validated_by":["rust"]}})));
     }
     Ok(rows)
@@ -354,7 +354,7 @@ mod tests {
             built_ms: 1,
             cutoff_day: 1,
             moomoo: "US.A".into(),
-            yahoo: "A".into(),
+            external: "A".into(),
             rank: 1,
             score: 1.0,
             observations: 20,

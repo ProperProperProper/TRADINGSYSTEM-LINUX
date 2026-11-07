@@ -272,7 +272,7 @@ def export_markdown(db, path, limit=60):
             "heuristic market-participant labels, and superseded strategy instructions.\n\n"
         )
         out.write("## Current sources of truth\n\n")
-        out.write("- Active bot and dashboard behavior: [project README](../../README.md), [system map](../../docs/SYSTEM.md), and [bot strategy](../STRATEGY.md).\n")
+        out.write("- Active bot and dashboard behavior: [project README](../../README.md).\n")
         out.write("- Hard risk and account boundaries: [owner rules](../src/papercompmoomoo/owner_rules.py) and the locally verified account configuration.\n")
         out.write("- Current position, quote, order, and fill state: timestamped local runtime records and Moomoo broker evidence.\n\n")
         out.write("## How to use retained memories\n\n")

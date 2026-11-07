@@ -93,7 +93,7 @@ pub fn ingest_all_test_and_research_data(
     let mut symbol_stats: std::collections::HashMap<String, (usize, usize, f64)> = std::collections::HashMap::new();
 
     if let Ok(mut stmt) = store_conn.prepare(
-        "SELECT d.yahoo_symbol, d.decision, o.outcome_pct, o.exit_reason 
+        "SELECT d.external_symbol, d.decision, o.outcome_pct, o.exit_reason
          FROM model_decisions d 
          JOIN model_decision_outcomes o ON d.id = o.decision_id 
          WHERE o.deterministic_eligible = 1"

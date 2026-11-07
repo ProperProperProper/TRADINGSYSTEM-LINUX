@@ -111,7 +111,7 @@ pub fn run(root: &Path, _now_ms: i64) -> Vec<String> {
     let crates_dirty = sh(
         root,
         "git",
-        &["status", "--porcelain", "crates", "bot/src", "bot/lab/src"],
+        &["status", "--porcelain", "crates", "bot/src"],
     )
     .map(|s| !s.is_empty())
     .unwrap_or(true);
@@ -146,7 +146,7 @@ pub fn run(root: &Path, _now_ms: i64) -> Vec<String> {
             )),
         }
     }
-    // 4. the portal and the importer copy
+    // 4. the portal copy
     if deploy::problems(root)
         .iter()
         .any(|p| p.text.contains("portal started before"))
@@ -156,17 +156,6 @@ pub fn run(root: &Path, _now_ms: i64) -> Vec<String> {
             "restarted the portal onto the current binary: {}",
             outcome(r)
         ));
-    }
-    if deploy::problems(root)
-        .iter()
-        .any(|p| p.text.contains("installed candle importer"))
-    {
-        let r = sh(
-            &root.join("bot"),
-            "target/release/bot-ops",
-            &["install-fetch"],
-        );
-        did(format!("reinstalled the candle importer: {}", outcome(r)));
     }
     log
 }

@@ -44,41 +44,6 @@ FINAL_REFUSALS = ("not a Nasdaq-listed symbol", "below the", "positions or worki
 MIN_MARKET_CAP = 500_000_000.0
 
 
-def best_tested_strategy(archive_path: Path | None = None) -> dict | None:
-    """Find the highest-performing tested strategy from the backtest archive to use immediately."""
-    path = archive_path or (PROJECT_ROOT / "state" / "ClaudeMoomooBotArchive" / "live_backtest_archive.sqlite3")
-    if not path.exists():
-        return None
-    try:
-        conn = sqlite3.connect(path)
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT source, window_label, return_pct, max_drawdown_pct, trades, wins, profit_factor, params_json "
-            "FROM bt_runs WHERE successful = 1 AND return_pct > 0 AND trades >= 50 "
-            "ORDER BY return_pct DESC LIMIT 1"
-        )
-        row = cur.fetchone()
-        conn.close()
-        if row:
-            params = json.loads(row[7]) if row[7] else {}
-            return {
-                "source": row[0],
-                "window_label": row[1],
-                "return_pct": float(row[2]),
-                "max_drawdown_pct": float(row[3]),
-                "trades": int(row[4]),
-                "wins": int(row[5]),
-                "profit_factor": float(row[6]),
-                "params": params,
-                "tp_pct": float(params.get("tp_pct", 2.2)),
-                "sl_pct": float(params.get("sl_pct", 0.8)),
-                "trail_pct": float(params.get("trail_pct", 0.8)),
-            }
-    except Exception:
-        pass
-    return None
-
-
 def phase_from_state(state: str | None, now: datetime) -> str:
     """'pre', 'open', 'after' or 'closed' from OpenD's US market state; without a state (OpenD unreadable) the clock decides, so the bot never trades blind on a guess about the broker."""
     if state:
@@ -194,7 +159,7 @@ def parse_momentum_selection(raw: str, session: str, size: int, tradable: set[st
         if code in tradable:
             raw_candidates.append({
                 "moomoo_symbol": code,
-                "yahoo_symbol": symbol,
+                "external_symbol": symbol,
                 "score": float(score_value),
                 "observations": observations,
                 "rank": rank

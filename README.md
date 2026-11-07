@@ -1,6 +1,6 @@
 # TradingSystem
 
-TradingSystem contains two Moomoo **simulated paper-trading** bots, Rust research tools, and a read-only dashboard. The active strategies are the NASDAQ Gainers bot and the ORB bot. Both bots fetch candidate and open-position data directly from Moomoo. The old Yahoo/converter pipeline is retired and cannot be started through the session controls. The older Rust bot under `bot/` is archived and is not either bot's live execution service.
+TradingSystem contains two Moomoo **simulated paper-trading** bots, Rust research tools, and a read-only dashboard. The active strategies are the NASDAQ Gainers bot and the ORB bot. Both bots fetch candidate and open-position data directly from Moomoo. The old legacy provider/converter pipeline is retired and cannot be started through the session controls. The Rust code under `bot/` is a shared protocol and strategy library, not a standalone execution service.
 
 ## Active paper accounts
 
@@ -24,7 +24,7 @@ Open-position charts show the exit worker's current ratcheting 100% target, gree
 
 ## Exit decisions and learning
 
-Both bots use upward-only ratcheting 100%, 70%, intermediate, midpoint, and red stop lines. The 100% target sells on fresh-price touch/up-cross; the 70%, intermediate, midpoint, and red stop sell on confirmed down-cross. The 70% line follows 70% of the current full-target line and is itself maxed against its persisted value. Regular-hours exits submit market sells; during ETH the worker uses a limit at the current executable bid and reprices from fresh data. Stale provider timestamps cannot be made fresh by local receipt time. The worker also applies the audited ThomasAI liquidity-trap exit and flattens all positions at 15:00 ET, one hour before close. No position-age exit is active. The `codex_exit_worker.py` service name is historical; it skips discretionary model review for these two bots. Qwen learning is shelved indefinitely and its automation has been removed; the local inference service and cognitive brain/ThomasAI decision components are retained. See [the exit worker notes](docs/EXIT_WORKER.md) and [the Qwen learning status](docs/QWEN_SESSION_LEARNING.md).
+Both bots use upward-only ratcheting 100%, 70%, intermediate, midpoint, and red stop lines. The 100% target sells on fresh-price touch/up-cross; the 70%, intermediate, midpoint, and red stop sell on confirmed down-cross. The 70% line follows 70% of the current full-target line and is itself maxed against its persisted value. Regular-hours exits submit market sells; during ETH the worker uses a limit at the current executable bid and reprices from fresh data. Stale provider timestamps cannot be made fresh by local receipt time. The worker also applies the ThomasAI liquidity-trap exit and flattens all positions at 15:00 ET, one hour before close. No position-age exit is active. The `codex_exit_worker.py` service name is historical; it skips discretionary model review for these two bots. Qwen learning is shelved indefinitely and its automation has been removed; the local inference service and cognitive brain/ThomasAI decision components are retained.
 
 ## Repository map
 
@@ -32,11 +32,11 @@ Both bots use upward-only ratcheting 100%, 70%, intermediate, midpoint, and red 
 | --- | --- |
 | `crates/core`, `crates/engine`, `crates/cli` | Rust data, research/evaluation, operations, and portal |
 | `papercompmoomoo/` | Gainers and ORB paper bots, candidate-scoped Moomoo feed, account and decision records |
-| `docs/` | Current system notes, data contracts, and dated audit/handover records |
-| `bot/` | Archived Rust strategy code; not an active paper-trading service |
+| `Causal Synthetic GEX Walk-Forward Guide.md` | Causal candidate-scoped entry/exit replay contract |
+| `bot/` | Shared Rust Moomoo protocol and strategy library used by active research tools |
 | `data/`, `papercompmoomoo/data/` | Local runtime state and market evidence; not source-controlled |
 
-Start with [system map](docs/SYSTEM.md), [current host state](STATE.md), and [open follow-ups](TASKS.md). The Gainers implementation audit is dated historical evidence in [GAINER_GATING_AUDIT.md](docs/GAINER_GATING_AUDIT.md).
+Start with [current host state](STATE.md), [open follow-ups](TASKS.md), and the [causal GEX replay contract](Causal%20Synthetic%20GEX%20Walk-Forward%20Guide.md).
 
 ## Build and operate
 
@@ -52,6 +52,6 @@ The read-only portal listens on port `8790`:
 target/release/thomas portal
 ```
 
-The paper-bot Python package and pinned Moomoo SDK are in `papercompmoomoo/`. Use the host's existing service manager for normal operation; do not start a second executor alongside the installed one. See [papercompmoomoo/README.md](papercompmoomoo/README.md) and [new-machine notes](docs/NEW_MACHINE.md) before setting up another host.
+The paper-bot Python package and pinned Moomoo SDK are in `papercompmoomoo/`. Use the host's existing service manager for normal operation; do not start a second executor alongside the installed one.
 
 Do not commit credentials, runtime databases, account snapshots, logs, or generated build output. Preserve local paper-trading evidence during repository cleanup.

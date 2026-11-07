@@ -1,4 +1,4 @@
-//! `thomas fetch-paper` (manual Yahoo feed; the scheduled job uses the sibling project's files instead, see `thomas import-bars`) and `thomas paper`: the local paper trader's stepping. No order leaves the machine; the fills come from the engine's
+//! `thomas paper`: the local paper trader's stepping. No order leaves the machine; the fills come from the engine's
 //! execution model on real candles (see `thomas_engine::paper`).
 use anyhow::{Context, Result};
 use rusqlite::Connection;
@@ -6,29 +6,10 @@ use std::path::Path;
 use thomas_engine::paper::{self, PaperAccount};
 use thomas_engine::{search, universe};
 
-/// Every tradable symbol (all SPY holdings; hard rule 14) as the live feed's list.
+/// Returns the locally recorded tradable symbols for offline paper replay.
 pub fn universe_symbols(conn: &Connection) -> Result<Vec<String>> {
     let mut st = conn.prepare("SELECT moomoo_symbol FROM symbols WHERE bot_status='tradable' OR moomoo_symbol='SPY' ORDER BY moomoo_symbol")?;
-    let v = st
-        .query_map([], |r| r.get::<_, String>(0))?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    anyhow::ensure!(
-        v.len() > 100,
-        "only {} tradable symbols in the store: run `thomas symbols`",
-        v.len()
-    );
-    Ok(v)
-}
-
-/// Fetches the last `days` days of real Yahoo 1-minute bars (closed bars only) for EVERY tradable symbol. The paper trader trades all SPY holdings: its feed is free,
-/// so the moomoo candle quota (which limits the weekly pick) does not apply to it.
-pub fn fetch(conn: &Connection, days: i64, now_ms: i64) -> Result<usize> {
-    let syms: Vec<(String, bool)> = universe_symbols(conn)?
-        .into_iter()
-        .map(|s| (s, true))
-        .collect();
-    let sum = thomas_core::extra::run_symbols(conn, now_ms, &syms, days)?;
-    Ok(sum.bars)
+    Ok(st.query_map([], |r| r.get::<_, String>(0))?.collect::<std::result::Result<Vec<_>, _>>()?)
 }
 
 /// Where a pause of the paper trader is kept on disk (relative to the project folder).

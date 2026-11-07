@@ -207,5 +207,5 @@ def build_market_brief(symbol, position, quote, bars, market_context, as_of_ms, 
         "market_context": context_brief,
         "strategy_context": strategy_context or {"strategy": "intraday_gainer"},
         "data_quality": {"missing_or_caveats": issues,
-            "note": "Strategy decisions use current-session closed Moomoo candles and derived trend/volume features. Order book is only an execution check. No Yahoo or snapshot values included."},
+            "note": "Strategy decisions use current-session closed Moomoo candles and derived trend/volume features. Order book is only an execution check. No legacy provider or snapshot values included."},
     }

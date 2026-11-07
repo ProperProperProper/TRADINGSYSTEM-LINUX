@@ -24,7 +24,7 @@ mod select;
 mod symbol_tune;
 mod validation;
 mod watchdog;
-use thomas_core::{candles, export, extra, merge, protodiff, reconcile, store, symbols};
+use thomas_core::{candles, export, merge, protodiff, store, symbols};
 
 #[derive(Parser)]
 struct Cli {
@@ -154,16 +154,6 @@ enum Cmd {
         #[arg(long, default_value = "data/thomas.sqlite3")]
         store: PathBuf,
     },
-    /// Cross-check moomoo against Yahoo, fill zero-volume bars with real Yahoo bars, record gaps
-    Reconcile {
-        #[arg(long, default_value = "data/candles.sqlite3")]
-        candles: PathBuf,
-        #[arg(long, default_value = "data/thomas.sqlite3")]
-        store: PathBuf,
-        /// Only these symbols (default: all)
-        #[arg(long, value_delimiter = ',')]
-        symbols: Option<Vec<String>>,
-    },
     /// Rebuild the symbol translation list (which symbols the live bot may trade)
     Symbols {
         #[arg(long, default_value = "data/candles.sqlite3")]
@@ -173,25 +163,16 @@ enum Cmd {
         #[arg(long, default_value = "data/thomas.sqlite3")]
         store: PathBuf,
     },
-    /// Fetch real Yahoo 1m bars for SPY holdings moomoo has no candles for (into candles_extra)
-    FetchExtra {
-        #[arg(long, default_value = "data/thomas.sqlite3")]
-        store: PathBuf,
-    },
-    /// Fetch the real US trading calendar since the research start (2026-01-02) into sessions_calendar
-    FetchSessions {
-        #[arg(long, default_value = "data/thomas.sqlite3")]
-        store: PathBuf,
-    },
-    /// Refresh data/candles.sqlite3 from the bot's store (read-only source, SQLite backup), e.g. after new moomoo pulls; then run `merge`
+    /// Refresh the research snapshot from the bot's read-only store after new Moomoo pulls.
     Snapshot {
-        /// Default: the bot's store inside this project (state/ClaudeMoomooBotArchive/moomoo.sqlite3)
+        /// Default: the bot's store inside this project (state/ClaudeMoomooBot/moomoo.sqlite3)
         #[arg(long)]
         from: Option<PathBuf>,
         #[arg(long, default_value = "data/candles.sqlite3")]
         to: PathBuf,
     },
-    /// Merge moomoo and Yahoo into candles_merged (moomoo primary; Yahoo only where moomoo lacks a real bar)
+    /// Retired compatibility command for pre-Moomoo-only research stores.
+    #[command(hide = true)]
     Merge {
         #[arg(long, default_value = "data/thomas.sqlite3")]
         store: PathBuf,
@@ -221,7 +202,7 @@ enum Cmd {
         /// The SDK's proto folder (default: inside the pinned SDK in tools/moomoo-venv)
         #[arg(long)]
         new: Option<PathBuf>,
-        #[arg(long, default_value = "docs/PROTO_DIFF.md")]
+        #[arg(long, default_value = "docs/PROTO_DIFF.generated.md")]
         report: PathBuf,
     },
     /// Git hook logic (hooks/ are one-line stubs that call this): pre-commit | post-commit
@@ -298,13 +279,6 @@ enum Cmd {
         #[arg(long)]
         force: bool,
     },
-    /// The local paper trader's live feed: the last days of real Yahoo 1-minute bars (closed bars only) for every tradable symbol; run `merge` after it
-    FetchPaper {
-        #[arg(long, default_value = "data/thomas.sqlite3")]
-        store: PathBuf,
-        #[arg(long, default_value_t = 3)]
-        days: i64,
-    },
     /// The local paper trader: steps the engine's own paper portfolio (5,000 USD, the measured fees, lot sizes and slippage) through every newly closed candle of the
     /// weekly pick; no order leaves the machine. The first run opens the account, later runs trade candles after it
     Paper {
@@ -330,8 +304,7 @@ enum Cmd {
     },
     /// End a pause of the paper trader now
     PaperResume,
-    /// The paper trader's whole pass in one light job (run by launchd at minutes 4, 19, 34 and 49 of every hour, after the sibling project's candle converter): inside US trading hours it pulls the closed bars of every tradable symbol,
-    /// merges them and steps the account; outside them it does nothing. Its own lock keeps two runs from overlapping
+    /// The retired local research-paper pass. The active paper bots use their shared candidate-scoped Moomoo feed.
     PaperRun {
         #[arg(long, default_value = "data/thomas.sqlite3")]
         store: PathBuf,
@@ -350,7 +323,7 @@ enum Cmd {
         /// Improvement-loop experiments per cycle (0 = none)
         #[arg(long, default_value_t = 2)]
         rounds: usize,
-        /// Skip the Yahoo/calendar refresh
+        /// Skip the legacy provider/calendar refresh
         #[arg(long)]
         no_refresh: bool,
     },
@@ -365,8 +338,7 @@ enum Cmd {
         #[arg(long)]
         force: bool,
     },
-    /// Read the new 1-minute bars from the SQLite candle store that papercompmoomoo keeps (the one store both bots use) into candles_extra, checked row by
-    /// row; run `merge` after it
+    /// Import checked 1-minute Moomoo bars from the shared local candle store.
     ImportBars {
         #[arg(long, default_value = "data/thomas.sqlite3")]
         store: PathBuf,
@@ -727,17 +699,6 @@ fn main() -> Result<()> {
             println!("median bar step (minutes) across symbols: {steps:?}");
             println!("symbols with bad price data: {:?}", r.bad_symbols);
         }
-        Cmd::Reconcile {
-            candles: db,
-            store: sdb,
-            symbols,
-        } => {
-            let c = candles::load(&db)?;
-            let conn = store::open(&sdb)?;
-            let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as i64;
-            let s = reconcile::run(&c, &conn, now, symbols.as_deref())?;
-            println!("{s:#?}");
-        }
         Cmd::Symbols {
             bot_snapshot,
             holdings,
@@ -748,18 +709,6 @@ fn main() -> Result<()> {
             for (k, n) in symbols::build(&conn, &bot_snapshot, &holdings, now)? {
                 println!("{k:<32} {n}");
             }
-        }
-        Cmd::FetchExtra { store: sdb } => {
-            let conn = store::open(&sdb)?;
-            let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as i64;
-            println!("{:#?}", extra::run(&conn, now)?);
-        }
-        Cmd::FetchSessions { store: sdb } => {
-            let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as i64;
-            println!(
-                "{} sessions stored",
-                extra::fetch_sessions(&store::open(&sdb)?, 1_767_312_000, now)?
-            );
         }
         Cmd::Snapshot { from, to } => {
             merge::snapshot(
@@ -1299,11 +1248,6 @@ fn main() -> Result<()> {
                     .join(", ")
             );
         }
-        Cmd::FetchPaper { store: sdb, days } => {
-            let conn = store::open(&sdb)?;
-            let bars = paper_cmd::fetch(&conn, days, ops::now_ms())?;
-            println!("{bars} closed 1-minute bars stored for the paper universe");
-        }
         Cmd::Paper {
             store: sdb,
             bot_snapshot,
@@ -1336,24 +1280,19 @@ fn main() -> Result<()> {
             }
             let _lock = ops::Lock::take(std::path::Path::new("data/paper.lock"))?;
             let conn = store::open(&sdb)?;
-            // no Yahoo request while downloads are off: the account steps on whatever candles are already stored
-            let bars = if thomas_core::config::YAHOO_DOWNLOADS {
-                paper_cmd::fetch(&conn, 3, now)?
+            let db = std::path::Path::new(thomas_core::ingest::EXTERNAL_DB);
+            let bars = if db.exists() {
+                let n = thomas_core::ingest::import_store_mapped(
+                    &conn,
+                    db,
+                    std::path::Path::new(thomas_core::ingest::SYMBOL_MAP),
+                    now,
+                )?
+                .bars;
+                thomas_core::ingest::derive_sessions(&conn, now)?;
+                n
             } else {
-                let db = std::path::Path::new(thomas_core::ingest::EXTERNAL_DB);
-                if db.exists() {
-                    let n = thomas_core::ingest::import_store_mapped(
-                        &conn,
-                        db,
-                        std::path::Path::new(thomas_core::ingest::SYMBOL_MAP),
-                        now,
-                    )?
-                    .bars;
-                    thomas_core::ingest::derive_sessions(&conn, now)?;
-                    n
-                } else {
-                    0
-                }
+                0
             };
             thomas_core::merge::run(&conn, &bot_snapshot)?;
             println!(
@@ -1452,7 +1391,6 @@ fn main() -> Result<()> {
                 &repo,
                 &repo.join("data/bundles"),
                 &stamp,
-                &portable::bot_archive(),
             )?;
             println!(
                 "bundle written: {} ({} MB)",
@@ -1469,7 +1407,7 @@ fn main() -> Result<()> {
                 Some(f) => f,
                 None => portable::download_latest(&repo, &repo.join("data/bundles"))?,
             };
-            let placed = portable::restore(&repo, &tar, &portable::bot_archive(), force)?;
+            let placed = portable::restore(&repo, &tar, force)?;
             println!("restored {} file(s) from {}", placed.len(), tar.display());
         }
         Cmd::Setup { bundle, dry_run } => {

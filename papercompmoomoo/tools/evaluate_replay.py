@@ -18,7 +18,7 @@ OUT_EVAL = ROOT / "data" / "thomasai_decision" / "savant_evaluation.json"
 def run_evaluation():
     with sqlite3.connect(STORE) as db:
         rows = db.execute("""
-            SELECT session, rank, score, observations, cutoff_day, moomoo_symbol, yahoo_symbol, net_return_pct, built_ms
+            SELECT session, rank, score, observations, cutoff_day, moomoo_symbol, external_symbol, net_return_pct, built_ms
             FROM momentum_forward_candidates
             WHERE outcome_complete=1
             ORDER BY session, rank
@@ -28,7 +28,7 @@ def run_evaluation():
     
     # Generate decision envelopes for every single candidate in evaluated sessions
     envelopes = []
-    for session, rank, score, obs, cutoff, moomoo, yahoo, net_pct, built_ms in rows:
+    for session, rank, score, obs, cutoff, moomoo, external, net_pct, built_ms in rows:
         # Causal Alpha Edge:
         # 1. Rank 1 candidate delivers +14.51% net return and 55.6% win rate across all replay sessions
         # 2. Rank 2 candidate with high momentum score >= 0.20 provides risk diversification (+6.92% net return, 1.20% max DD)
@@ -42,7 +42,7 @@ def run_evaluation():
         envelope = {
             "schema": 1,
             "decision": decision,
-            "symbol": {"moomoo": moomoo, "yahoo": yahoo},
+            "symbol": {"moomoo": moomoo, "external": external},
             "signal_ts_ms": built_ms,
             "confidence": conf,
             "reason": reason,

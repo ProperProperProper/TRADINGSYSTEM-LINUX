@@ -3,7 +3,7 @@ use anyhow::Result;
 use rusqlite::Connection;
 use std::{fmt::Write as _, fs, path::Path};
 
-use crate::symbols::{MOOMOO_MARKET, yahoo_symbol};
+use crate::symbols::{MOOMOO_MARKET, external_symbol};
 
 fn csv_field(s: &str) -> String {
     if s.contains([',', '"', '\n']) {
@@ -16,13 +16,13 @@ fn csv_field(s: &str) -> String {
 /// Writes data/symbol_map.csv: one row per symbol with both spellings, status and match evidence.
 pub fn symbol_map_csv(conn: &Connection, out: &Path) -> Result<usize> {
     let mut st = conn.prepare(
-        "SELECT s.moomoo_symbol, s.moomoo_market, s.yahoo_symbol, s.name, s.bot_status, s.yahoo_match,
-                s.yahoo_returned_symbol, s.yahoo_name, s.overlap_bars, s.close_diff_bps_median, s.close_diff_bps_p99,
-                s.volume_ratio_median, c.moomoo_bars, c.filled_from_yahoo, c.gap_bars,
+        "SELECT s.moomoo_symbol, s.moomoo_market, s.external_symbol, s.name, s.bot_status, s.external_match,
+                s.external_returned_symbol, s.external_name, s.overlap_bars, s.close_diff_bps_median, s.close_diff_bps_p99,
+                s.volume_ratio_median, c.moomoo_bars, c.filled_from_external, c.gap_bars,
                 (SELECT count(*) FROM candles_extra e WHERE e.moomoo_symbol=s.moomoo_symbol)
          FROM symbols s LEFT JOIN symbol_coverage c USING(moomoo_symbol) ORDER BY s.moomoo_symbol")?;
     let mut text = String::from(
-        "moomoo_symbol,moomoo_market,yahoo_symbol,name,bot_status,yahoo_match,yahoo_returned_symbol,yahoo_name,overlap_bars,close_diff_bps_median,close_diff_bps_p99,volume_ratio_median,moomoo_bars,yahoo_filled_bars,gap_bars,yahoo_extra_bars\n",
+        "moomoo_symbol,moomoo_market,external_symbol,name,bot_status,external_match,external_returned_symbol,external_name,overlap_bars,close_diff_bps_median,close_diff_bps_p99,volume_ratio_median,moomoo_bars,external_filled_bars,gap_bars,external_extra_bars\n",
     );
     let mut n = 0;
     let mut rows = st.query([])?;
@@ -168,23 +168,23 @@ pub fn verify(
     let mut f = Vec::new();
     for t in q1(conn, "SELECT moomoo_symbol FROM symbols")? {
         let (y, market): (String, String) = conn.query_row(
-            "SELECT yahoo_symbol, moomoo_market FROM symbols WHERE moomoo_symbol=?",
+            "SELECT external_symbol, moomoo_market FROM symbols WHERE moomoo_symbol=?",
             [&t],
             |r| Ok((r.get(0)?, r.get(1)?)),
         )?;
-        if t.is_empty() || y.is_empty() || y != yahoo_symbol(&t) || market != MOOMOO_MARKET {
+        if t.is_empty() || y.is_empty() || y != external_symbol(&t) || market != MOOMOO_MARKET {
             f.push(t);
         }
     }
     add(
-        "every symbol has a moomoo and a yahoo spelling, consistently derived",
+        "every symbol has a moomoo and a external spelling, consistently derived",
         f,
     );
     add(
-        "yahoo spellings are unique",
+        "external spellings are unique",
         q1(
             conn,
-            "SELECT yahoo_symbol FROM symbols GROUP BY yahoo_symbol HAVING count(*)>1",
+            "SELECT external_symbol FROM symbols GROUP BY external_symbol HAVING count(*)>1",
         )?,
     );
 
@@ -212,26 +212,26 @@ pub fn verify(
         cs.into_iter().filter(|s| !known.contains(s)).collect(),
     );
 
-    // Yahoo agreement.
+    // legacy provider agreement.
     add(
-        "no symbol with a yahoo_match of mismatch",
+        "no symbol with a external_match of mismatch",
         q1(
             conn,
-            "SELECT moomoo_symbol FROM symbols WHERE yahoo_match='mismatch'",
+            "SELECT moomoo_symbol FROM symbols WHERE external_match='mismatch'",
         )?,
     );
     add(
-        "yahoo returned the symbol we asked for",
+        "external returned the symbol we asked for",
         q1(
             conn,
-            "SELECT moomoo_symbol FROM symbols WHERE yahoo_returned_symbol IS NOT NULL AND upper(yahoo_returned_symbol)!=upper(yahoo_symbol)",
+            "SELECT moomoo_symbol FROM symbols WHERE external_returned_symbol IS NOT NULL AND upper(external_returned_symbol)!=upper(external_symbol)",
         )?,
     );
     add(
         "every fetched symbol was checked (returned symbol recorded)",
         q1(
             conn,
-            "SELECT moomoo_symbol FROM symbols s WHERE has_moomoo_candles=1 AND yahoo_returned_symbol IS NULL OR (in_spy=1 AND NOT EXISTS (SELECT 1 FROM candles_extra e WHERE e.moomoo_symbol=s.moomoo_symbol) AND has_moomoo_candles=0)",
+            "SELECT moomoo_symbol FROM symbols s WHERE has_moomoo_candles=1 AND external_returned_symbol IS NULL OR (in_spy=1 AND NOT EXISTS (SELECT 1 FROM candles_extra e WHERE e.moomoo_symbol=s.moomoo_symbol) AND has_moomoo_candles=0)",
         )?,
     );
 
@@ -245,7 +245,7 @@ pub fn verify(
         "source_checks",
     ] {
         let sql = format!(
-            "SELECT DISTINCT x.moomoo_symbol FROM {t} x LEFT JOIN symbols s USING(moomoo_symbol) WHERE s.moomoo_symbol IS NULL OR x.yahoo_symbol!=s.yahoo_symbol"
+            "SELECT DISTINCT x.moomoo_symbol FROM {t} x LEFT JOIN symbols s USING(moomoo_symbol) WHERE s.moomoo_symbol IS NULL OR x.external_symbol!=s.external_symbol"
         );
         let name: &'static str = match t {
             "candles_supplement" => "candles_supplement rows carry the mapped pair",
@@ -257,11 +257,11 @@ pub fn verify(
         };
         add(name, q1(conn, &sql)?);
     }
-    // Moomoo always wins: no Yahoo row may sit where the snapshot has a real moomoo bar.
+    // Moomoo always wins: no legacy provider row may sit where the snapshot has a real moomoo bar.
     let mut clash = Vec::new();
     if let Some(bot) = &bot {
         let mut st =
-            conn.prepare("SELECT moomoo_symbol, wall_ms FROM candles_merged WHERE source='yahoo'")?;
+            conn.prepare("SELECT moomoo_symbol, wall_ms FROM candles_merged WHERE source='external'")?;
         let mut q = bot.prepare(
             "SELECT 1 FROM candles WHERE symbol=? AND wall_ms=? AND kind='trades' AND volume>0",
         )?;
@@ -273,14 +273,14 @@ pub fn verify(
         }
     }
     add(
-        "no Yahoo bar where moomoo has a real bar (moomoo is primary)",
+        "no legacy provider bar where moomoo has a real bar (moomoo is primary)",
         clash,
     );
     add(
-        "every merged Yahoo row is flagged as an estimated-turnover row",
+        "every merged legacy provider row is flagged as an estimated-turnover row",
         q1(
             conn,
-            "SELECT moomoo_symbol FROM candles_merged WHERE source='yahoo' AND turnover_estimated!=1 UNION SELECT moomoo_symbol FROM candles_merged WHERE source='moomoo' AND turnover_estimated!=0",
+            "SELECT moomoo_symbol FROM candles_merged WHERE source='external' AND turnover_estimated!=1 UNION SELECT moomoo_symbol FROM candles_merged WHERE source='moomoo' AND turnover_estimated!=0",
         )?,
     );
     add(
@@ -322,7 +322,7 @@ pub fn verify(
         )?,
     );
     add(
-        "every symbol in the map has Yahoo 1-minute bars in the archive (hard rule: all symbols)",
+        "every symbol in the map has legacy provider 1-minute bars in the archive (hard rule: all symbols)",
         q1(
             conn,
             "SELECT moomoo_symbol FROM symbols s WHERE NOT EXISTS (SELECT 1 FROM candles_extra e WHERE e.moomoo_symbol = s.moomoo_symbol)",

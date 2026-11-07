@@ -5,14 +5,6 @@ edition = "2021"
 description = "Mean-reversion paper bot for US stocks over moomoo OpenD (all Rust)"
 publish = false
 
-[[bin]]
-name = "bot"
-path = "src/bin/bot/main.rs"
-
-[[bin]]
-name = "bot-ops"
-path = "src/bin/bot-ops/main.rs"
-
 [dependencies]
 anyhow = "1"
 prost = "0.14"

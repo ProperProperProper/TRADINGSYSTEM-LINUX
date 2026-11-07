@@ -22,7 +22,6 @@ pub const ENGINE_COMMIT: &str = env!("BOT_GIT_COMMIT");
 /// What the simulation charges and assumes. Bump when any of this changes.
 pub const COST_MODEL_VERSION: &str = "moomoo-v1 2026-10-06: commission from this account's real moomoo paper order fees (excluded, and labelled so, until a real fee exists), half the quoted bid/ask spread each way (moomoo snapshot), 1x (no leverage, no liquidation), no funding, decisions fill two trading bars after the deciding close, take-profit exits at 70% of the decided value, long only; marks are traded candles (moomoo has no midpoint candles); paper fills are real moomoo paper fills";
 
-pub mod btarchive;
 pub mod execution;
 pub mod governor;
 pub mod live_options;

@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["crates/core", "crates/engine", "crates/cli"]
-# the trading bot is a library this workspace uses and has its own build (bot/Cargo.toml, bot/lab, bot/mcp)
+# the shared Moomoo strategy library is kept as a separate package for the active Rust research tools
 exclude = ["bot"]
 
 [workspace.package]

@@ -59,18 +59,18 @@ class CandleStore:
         if "updated_ms" not in {r[1] for r in self.db.execute("PRAGMA table_info(bars)")}:
             with self.db:  # when the row last changed: TradingSystem imports every row changed since its last import, so revisions reach it as well as new bars
                 self.db.execute("ALTER TABLE bars ADD COLUMN updated_ms INTEGER NOT NULL DEFAULT 0")
-        if "vol_y" not in {r[1] for r in self.db.execute("PRAGMA table_info(bars)")}:
+        if "vol_legacy" not in {r[1] for r in self.db.execute("PRAGMA table_info(bars)")}:
             with self.db:  # retain legacy volume columns without using them for live decisions
-                self.db.execute("ALTER TABLE bars ADD COLUMN vol_y REAL")
+                self.db.execute("ALTER TABLE bars ADD COLUMN vol_legacy REAL")
                 self.db.execute("ALTER TABLE bars ADD COLUMN vol_m REAL")
         if "source" not in {r[1] for r in self.db.execute("PRAGMA table_info(bars)")}:
             with self.db:  # preserve provenance on existing disk rows
-                self.db.execute("ALTER TABLE bars ADD COLUMN source TEXT NOT NULL DEFAULT 'yahoo'")
+                self.db.execute("ALTER TABLE bars ADD COLUMN source TEXT NOT NULL DEFAULT 'external'")
         from .decision_audit import preserve_versions
         preserve_versions(self.db)
         with self.db:  # preserve existing Moomoo volume provenance during schema upgrades
-            self.db.execute("UPDATE bars SET vol_y = volume WHERE vol_y IS NULL AND vol_m IS NULL AND source = 'yahoo'")
-            self.db.execute("UPDATE bars SET vol_m = volume WHERE vol_y IS NULL AND vol_m IS NULL AND source = 'moomoo'")
+            self.db.execute("UPDATE bars SET vol_legacy = volume WHERE vol_legacy IS NULL AND vol_m IS NULL AND source = 'external'")
+            self.db.execute("UPDATE bars SET vol_m = volume WHERE vol_legacy IS NULL AND vol_m IS NULL AND source = 'moomoo'")
 
     def close(self) -> None:
         self.db.close()
@@ -98,7 +98,7 @@ class CandleStore:
         return len(rows)
 
     def moomoo_frame(self, symbol: str, since: datetime | None = None):
-        """Read only native Moomoo bars; legacy Yahoo rows cannot enter live decisions."""
+        """Read only native Moomoo bars; legacy legacy provider rows cannot enter live decisions."""
         import pandas as pd
 
         since_ms = int(since.timestamp() * 1000) if since else 0

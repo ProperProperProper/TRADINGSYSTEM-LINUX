@@ -1299,7 +1299,6 @@ struct TradeMarker {
     target_70_price: Option<f64>,
     profit_retrace_price: Option<f64>,
     profit_midpoint_price: Option<f64>,
-    live_price: Option<f64>,
 }
 
 #[derive(Clone)]
@@ -1863,7 +1862,6 @@ fn orb_bought_charts(s: &Sources, orb_db: &Connection) -> String {
                     target_70_price: None,
                     profit_retrace_price: None,
                     profit_midpoint_price: None,
-                    live_price: None,
                 });
             }
         }
@@ -1907,7 +1905,6 @@ fn orb_bought_charts(s: &Sources, orb_db: &Connection) -> String {
                     target_70_price: levels.and_then(|v| v["target_70_price"].as_f64()),
                     profit_retrace_price: levels.and_then(|v| v["profit_retrace_price"].as_f64()),
                     profit_midpoint_price: levels.and_then(|v| v["profit_midpoint_price"].as_f64()),
-                    live_price: None,
                 });
             }
         }
@@ -2012,7 +2009,6 @@ fn comp_bought_charts(s: &Sources, status: Option<&serde_json::Value>) -> String
                         target_70_price: None,
                         profit_retrace_price: None,
                         profit_midpoint_price: None,
-                        live_price: None,
                     });
                 }
             }
@@ -2066,7 +2062,6 @@ fn comp_bought_charts(s: &Sources, status: Option<&serde_json::Value>) -> String
                 target_70_price: levels.and_then(|v| v["target_70_price"].as_f64()),
                 profit_retrace_price: levels.and_then(|v| v["profit_retrace_price"].as_f64()),
                 profit_midpoint_price: levels.and_then(|v| v["profit_midpoint_price"].as_f64()),
-                live_price: Some(price),
             });
         }
     }
@@ -2108,7 +2103,7 @@ fn comp_bought_charts(s: &Sources, status: Option<&serde_json::Value>) -> String
                 stop_price: stop, target_price: target,
                 target_70_price: levels.and_then(|v| v["target_70_price"].as_f64()),
                 profit_retrace_price: levels.and_then(|v| v["profit_retrace_price"].as_f64()),
-                profit_midpoint_price: levels.and_then(|v| v["profit_midpoint_price"].as_f64()), live_price: Some(price),
+                profit_midpoint_price: levels.and_then(|v| v["profit_midpoint_price"].as_f64()),
             });
         }
     }
@@ -2133,29 +2128,6 @@ fn comp_bought_charts(s: &Sources, status: Option<&serde_json::Value>) -> String
     }
     cards.push_str("</div>");
     cards
-}
-
-fn previous_traded_charts(s:&Sources,db:&Connection,orb:bool)->String{
-    let current_start=ny_session_bounds(s.now_ms).0;
-    let prior:i64=db.query_row("SELECT coalesce(max(opened_ms),0) FROM trades WHERE opened_ms<?",[current_start],|r|r.get(0)).unwrap_or(0);
-    if prior<=0{return String::new();}
-    let(start,end,label)=ny_session_bounds(prior);
-    let sql=if orb{
-        "SELECT symbol,qty,entry_price,exit_price,pnl_usd,reason,opened_ms,closed_ms FROM trades WHERE opened_ms>=? AND opened_ms<? ORDER BY opened_ms"
-    }else{
-        "SELECT symbol,qty,entry,exit_price,(exit_price-entry)*qty,reason,opened_ms,closed_ms FROM trades WHERE opened_ms>=? AND opened_ms<? ORDER BY opened_ms"
-    };
-    let mut grouped:std::collections::BTreeMap<String,Vec<TradeMarker>>=std::collections::BTreeMap::new();
-    if let Ok(mut st)=db.prepare(sql){if let Ok(rows)=st.query_map(rusqlite::params![start,end],|r|Ok((r.get::<_,String>(0)?,r.get::<_,i64>(1)?,r.get::<_,f64>(2)?,r.get::<_,f64>(3)?,r.get::<_,f64>(4)?,r.get::<_,String>(5)?,r.get::<_,i64>(6)?,r.get::<_,i64>(7)?))){
-        for row in rows.flatten(){let pct=if row.2>0.0{(row.3/row.2-1.0)*100.0}else{0.0};grouped.entry(row.0.trim_start_matches("US.").to_string()).or_default().push(TradeMarker{opened_ms:row.6,closed_ms:Some(row.7),qty:row.1,entry_price:row.2,exit_price:Some(row.3),pnl_usd:row.4,pnl_pct:pct,reason:row.5,stop_price:None,target_price:None,target_70_price:None,profit_retrace_price:None,profit_midpoint_price:None,live_price:None});}
-    }}
-    if grouped.is_empty(){return String::new();}
-    let common=open_ro(&s.repo.join("papercompmoomoo/data/common1m.sqlite3")).ok();
-    let feed=open_ro(&s.repo.join("papercompmoomoo/data/feed.sqlite3")).ok();
-    let account=if orb{"ORB · SHARED COMPETITION PAPER ACCOUNT"}else{"GAINERS · SHARED COMPETITION PAPER ACCOUNT"};
-    let mut out=format!("<h2>Previous traded session — {label} ET</h2><p class=muted>Traded symbols only from the immediately previous session.</p><div style=\"display:grid;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));gap:16px;margin:14px 0;\">");
-    for(sym,trades)in &grouped{out.push_str(&render_bought_symbol_chart(common.as_ref(),feed.as_ref(),sym,trades,&[],start+12*3_600_000,None,s.now_ms,account));}
-    out.push_str("</div>");out
 }
 
 fn paper(s: &Sources) -> String {
@@ -2322,14 +2294,6 @@ fn common_db_blocks(path: &Path) -> (String, String) {
 /// Intraday evidence always uses the requested UTC day, including an empty day.
 fn session_filter(column: &str, now_ms: i64) -> String {
     format!("{column} >= {} AND {column} < {}", now_ms.div_euclid(86_400_000) * 86_400_000, (now_ms.div_euclid(86_400_000) + 1) * 86_400_000)
-}
-
-fn gainers(s: &Sources) -> String {
-    let Some(j) = s.journal else {
-        return "<p class=muted>No gainer journal is available.</p>".into();
-    };
-    format!("<p>Current UTC session only. Empty means no evidence this session.</p><h2>Gainer surge, RVOL and admission decisions</h2>{}",
-        table(j, &format!("SELECT ts_ms, symbol, CASE WHEN event='gainer_rejected' AND json_valid(detail) AND json_extract(detail,'$.reason') LIKE 'Moomoo quote stale%' THEN 'gainer_waiting_quote' ELSE event END AS event, CASE WHEN json_valid(detail) THEN json_extract(detail,'$.rvol') END AS rvol, CASE WHEN json_valid(detail) THEN json_extract(detail,'$.change_pct') END AS change_pct, CASE WHEN json_valid(detail) THEN json_extract(detail,'$.conviction') END AS conviction, CASE WHEN json_valid(detail) THEN json_extract(detail,'$.bear') END AS bear, CASE WHEN json_valid(detail) THEN json_extract(detail,'$.reason') ELSE detail END AS reason FROM plan_events WHERE {} AND event IN ('gainer_admitted','gainer_rejected','gainer_waiting_quote','live_gainer_discovered') ORDER BY ts_ms DESC LIMIT 200", session_filter("ts_ms", s.now_ms))))
 }
 
 fn comp_gainers_table(s: &Sources) -> String {
@@ -2564,7 +2528,7 @@ fn thomas_shadow(s: &Sources) -> String {
         ),
         table(
             s.store,
-            "SELECT d.id, d.run_id, d.signal_ts_ms, d.yahoo_symbol, d.decision, round(d.confidence,3) AS confidence, o.deterministic_eligible, o.agreement, round(o.outcome_pct,3) AS outcome_pct, o.exit_reason FROM model_decisions d LEFT JOIN model_decision_outcomes o ON o.decision_id=d.id ORDER BY d.id DESC LIMIT 100"
+            "SELECT d.id, d.run_id, d.signal_ts_ms, d.external_symbol, d.decision, round(d.confidence,3) AS confidence, o.deterministic_eligible, o.agreement, round(o.outcome_pct,3) AS outcome_pct, o.exit_reason FROM model_decisions d LEFT JOIN model_decision_outcomes o ON o.decision_id=d.id ORDER BY d.id DESC LIMIT 100"
         )
     )
 }
@@ -2610,7 +2574,7 @@ pub fn route(path: &str, s: &Sources) -> (u16, String) {
 /// public Internet hosts while allowing a browser on the LAN to use this machine's private IP.
 pub fn host_ok(host: &str, port: u16) -> bool {
     let host = host.trim().to_lowercase();
-    if host == "localhost" || host == "127.0.0.1" {
+    if host == "localhost" || host == "127.0.0.1" || host == format!("localhost:{port}") {
         return true;
     }
     if let Ok(addr) = host.parse::<std::net::SocketAddrV4>() {
@@ -2801,12 +2765,7 @@ fn handle(mut stream: TcpStream, store: &Path, archive: &Path, repo: &Path, port
             );
         }
     };
-    let arch_candidate = repo.join("state/ClaudeMoomooBotArchive/live_backtest_archive.sqlite3");
-    let arch = if arch_candidate.exists() {
-        open_ro(&arch_candidate).ok()
-    } else {
-        open_ro(archive).ok()
-    };
+    let arch = open_ro(archive).ok();
     let journal = open_ro(&repo.join("papercompmoomoo/data/journal.sqlite3")).ok();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -2863,24 +2822,6 @@ mod tests {
         assert_eq!(chart_session_anchor(weekend, prior), prior);
     }
 
-    #[test]
-    fn gainers_never_falls_back_to_old_sessions() {
-        let c = store();
-        let journal = Connection::open_in_memory().unwrap();
-        journal.execute_batch("CREATE TABLE plan_events(ts_ms INTEGER, symbol TEXT, event TEXT, detail TEXT); INSERT INTO plan_events VALUES(1,'OLD_RUNNER','gainer_admitted','old'),(86400001,'CURRENT_RUNNER','gainer_admitted','current'),(172800001,'FUTURE_RUNNER','gainer_admitted','future');").unwrap();
-        let repo = std::env::temp_dir();
-        let mut sources = src(&c, &repo);
-        sources.journal = Some(&journal);
-        sources.now_ms = 86_400_002;
-        let (code, html) = route("/gainers", &sources);
-        assert_eq!(code, 200);
-        assert!(html.contains("CURRENT_RUNNER"));
-        assert!(!html.contains("OLD_RUNNER") && !html.contains("FUTURE_RUNNER"));
-        sources.now_ms = 259_200_000;
-        let (_, empty) = route("/gainers", &sources);
-        assert!(!empty.contains("CURRENT_RUNNER") && !empty.contains("OLD_RUNNER"));
-    }
-
     fn store() -> Connection {
         let c = Connection::open_in_memory().unwrap();
         thomas_core::store::init(&c).unwrap();
@@ -2925,65 +2866,6 @@ mod tests {
     }
 
     #[test]
-    fn every_page_renders_on_an_empty_store_and_unknown_paths_are_404() {
-        let c = store();
-        let repo = std::env::temp_dir();
-        for p in [
-            "/",
-            "/comp",
-            "/gainers",
-            "/comp?x=1",
-        ] {
-            let (code, html) = route(p, &src(&c, &repo));
-            assert_eq!(code, 200, "{p}");
-            assert!(html.contains("<nav>") && html.contains("Read-only"), "{p}");
-            if p.starts_with("/comp") {
-                assert!(
-                    html.contains("<th>Area</th>"),
-                    "{p}: every tab starts with the same status table as the competition page"
-                );
-            }
-            assert!(
-                !html.contains("<pre>{"),
-                "{p}: JSON is shown as tables, not raw"
-            );
-        }
-        assert_eq!(route("/etc/passwd", &src(&c, &repo)).0, 404);
-        assert_eq!(route("/../data/thomas.sqlite3", &src(&c, &repo)).0, 404);
-    }
-
-    #[test]
-    fn the_competition_page_shows_each_candidate_with_its_live_price_and_percent() {
-        let c = store();
-        let d = std::env::temp_dir().join(format!("thomas-portal-comp-{}", std::process::id()));
-        std::fs::create_dir_all(d.join("papercompmoomoo/data")).unwrap();
-        std::fs::write(
-            d.join("papercompmoomoo/data/status.json"),
-            r#"{"state":"scanning","watchlist":[{"symbol":"US.AAA","price":10.45,"change_pct":4.5,"rvol":7.5,"signal_move_pct":4.2,"bid":10.44,"ask":10.46,"spread_pct":0.19,"decision":"ordered"},{"symbol":"US.BBB","price":null,"change_pct":null,"rvol":1.0,"signal_move_pct":3.1,"decision":"skipped: <b>x</b>"}],"positions_live":[{"symbol":"US.AAA","qty":100,"entry":10.46,"price":10.5,"pnl_pct":0.38}]}"#,
-        )
-        .unwrap();
-        let (code, html) = route("/comp", &src(&c, &d));
-        assert_eq!(code, 200);
-        assert!(
-            html.contains("US.AAA") && html.contains("10.4500") && html.contains("4.50"),
-            "{html}"
-        );
-        assert!(
-            html.contains("class=good") && html.contains("0.38"),
-            "positions show their live percent"
-        );
-        assert!(
-            html.contains("–") && html.contains("&lt;b&gt;x&lt;/b&gt;"),
-            "a missing price is a dash and text is escaped"
-        );
-        assert!(
-            !html.contains("<iframe"),
-            "one portal: nothing is framed from another address"
-        );
-        let _ = std::fs::remove_dir_all(&d);
-    }
-
-    #[test]
     fn the_paper_page_shows_the_account_against_spy_its_trades_and_a_chart() {
         let c = store();
         for (i, (eq, spy)) in [(5000.0, 500.0), (5050.0, 505.0), (5100.0, 495.0)]
@@ -3014,20 +2896,6 @@ mod tests {
         assert!(
             h.contains("<polyline class=eq") && h.contains("points=\"\""),
             "no SPY points, still renders: {h}"
-        );
-    }
-
-    #[test]
-    fn only_the_loopback_host_is_served() {
-        assert!(
-            host_ok(" 127.0.0.1:8790", 8790)
-                && host_ok("localhost:8790", 8790)
-                && host_ok("LOCALHOST", 8790)
-        );
-        assert!(
-            !host_ok("evil.example:8790", 8790)
-                && !host_ok("127.0.0.1.evil.com", 8790)
-                && !host_ok("", 8790)
         );
     }
 

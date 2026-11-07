@@ -8,7 +8,11 @@ from pathlib import Path
 def account_id(bot: str) -> int:
     if bot not in {"gainer", "orb"}:
         raise ValueError(f"unknown paper bot: {bot}")
-    path = Path(__file__).resolve().parents[2] / "data" / "account_ids.json"
+    candidates = [
+        Path.cwd() / "data" / "account_ids.json",
+        Path(__file__).resolve().parents[2] / "data" / "account_ids.json",
+    ]
+    path = next((candidate for candidate in candidates if candidate.exists()), candidates[0])
     try:
         values = json.loads(path.read_text())
         gainer, orb = int(values["gainer"]), int(values["orb"])

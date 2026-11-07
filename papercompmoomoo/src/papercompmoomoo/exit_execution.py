@@ -1,4 +1,5 @@
 """Pure execution freshness checks. No model HTTP calls or order submission."""
+from __future__ import annotations
 import math
 from dataclasses import dataclass
 

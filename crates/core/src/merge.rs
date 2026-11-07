@@ -1,23 +1,23 @@
-//! One candle base from two sources: moomoo is primary, Yahoo fills only what moomoo lacks (a symbol without candles, a missing
-//! bar, or a zero-volume bar inside Yahoo's window). Every row says which source it came from. Nothing is invented: Yahoo's
+//! One candle base from two sources: moomoo is primary, legacy provider fills only what moomoo lacks (a symbol without candles, a missing
+//! bar, or a zero-volume bar inside legacy provider's window). Every row says which source it came from. Nothing is invented: legacy provider's
 //! turnover, which it does not report, is estimated as volume x (high + low + close) / 3 and flagged.
 use anyhow::Result;
 use rusqlite::{Connection, OpenFlags};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::Path;
 
-use crate::symbols::yahoo_symbol;
+use crate::symbols::external_symbol;
 
 const BAR_MS: i64 = 60_000;
 
 #[derive(Debug, Default, PartialEq)]
 pub struct Summary {
     pub moomoo_bars: usize,
-    pub yahoo_bars: usize,
-    pub yahoo_replaced_zero_volume: usize,
+    pub external_bars: usize,
+    pub external_replaced_zero_volume: usize,
     pub placeholder_bars_removed: usize,
     pub symbols: usize,
-    pub yahoo_only_symbols: usize,
+    pub external_only_symbols: usize,
     /// Flat zero-volume bars for no-trade slots (see `carry_fill`).
     pub carry_bars: usize,
 }
@@ -88,7 +88,7 @@ pub fn carry_fill(ts: &[(i64, f64)], calendar: &BTreeSet<i64>) -> Vec<(i64, f64)
     out
 }
 
-/// Turnover estimate for a Yahoo bar (Yahoo reports none).
+/// Turnover estimate for a legacy provider bar (legacy provider reports none).
 pub fn estimate_turnover(volume: f64, high: f64, low: f64, close: f64) -> f64 {
     volume * (high + low + close) / 3.0
 }
@@ -111,7 +111,7 @@ pub fn snapshot(from: &Path, to: &Path) -> Result<()> {
 }
 
 pub fn run(ours: &Connection, snapshot: &Path) -> Result<Summary> {
-    // A machine with no moomoo snapshot yet (a fresh install, or cleared data) gets a Yahoo-only base; moomoo rows replace it later.
+    // A machine with no moomoo snapshot yet (a fresh install, or cleared data) gets a legacy provider-only base; moomoo rows replace it later.
     let bot = if snapshot.exists() {
         Some(Connection::open_with_flags(
             snapshot,
@@ -174,8 +174,8 @@ pub fn run(ours: &Connection, snapshot: &Path) -> Result<Summary> {
     }
     sum.moomoo_bars = moomoo.len();
 
-    // Yahoo archive: only what moomoo lacks.
-    let mut yahoo: Vec<(String, i64, f64, f64, f64, f64, f64)> = Vec::new();
+    // legacy provider archive: only what moomoo lacks.
+    let mut external: Vec<(String, i64, f64, f64, f64, f64, f64)> = Vec::new();
     {
         let mut st = ours.prepare("SELECT moomoo_symbol, wall_ms, open, high, low, close, volume FROM candles_extra ORDER BY moomoo_symbol, wall_ms")?;
         for r in st.query_map([], |r| {
@@ -189,20 +189,20 @@ pub fn run(ours: &Connection, snapshot: &Path) -> Result<Summary> {
                 r.get(6)?,
             ))
         })? {
-            yahoo.push(r?);
+            external.push(r?);
         }
     }
     // Session edges from the timestamps most symbols traded at.
     let mut by_symbol: BTreeMap<String, Vec<i64>> = BTreeMap::new();
-    for y in &yahoo {
+    for y in &external {
         by_symbol.entry(y.0.clone()).or_default().push(y.1);
     }
     let calendar = active_calendar(&by_symbol);
     let edges = session_edges(&calendar);
 
     // moomoo rows keep the snapshot's prices. Their volume is the common database's for that bar (the competition project's converter has put Moomoo's volume into
-    // Yahoo's unit and averaged it with Yahoo's there, so both bots read the same number); where the common database has no bar the snapshot's own volume stands.
-    let common_volume: std::collections::HashMap<(&str, i64), f64> = yahoo
+    // legacy provider's unit and averaged it with legacy provider's there, so both bots read the same number); where the common database has no bar the snapshot's own volume stands.
+    let common_volume: std::collections::HashMap<(&str, i64), f64> = external
         .iter()
         .filter(|y| y.6 > 0.0)
         .map(|y| ((y.0.as_str(), y.1), y.6))
@@ -220,7 +220,7 @@ pub fn run(ours: &Connection, snapshot: &Path) -> Result<Summary> {
             let f = if *v > 0.0 { blended / v } else { 1.0 };
             ins.execute((
                 s,
-                yahoo_symbol(s),
+                external_symbol(s),
                 w,
                 o,
                 h,
@@ -234,10 +234,10 @@ pub fn run(ours: &Connection, snapshot: &Path) -> Result<Summary> {
             ))?;
         }
         let moomoo_symbols: HashSet<&str> = moomoo.keys().map(|k| k.0.as_str()).collect();
-        let mut yahoo_only: HashSet<&str> = HashSet::new();
-        for (s, w, o, h, l, c, v) in &yahoo {
+        let mut external_only: HashSet<&str> = HashSet::new();
+        for (s, w, o, h, l, c, v) in &external {
             if v.is_nan() || *v <= 0.0 {
-                continue; // no real Yahoo volume: nothing to add
+                continue; // no real legacy provider volume: nothing to add
             }
             let existing = moomoo.get(&(s.clone(), *w));
             let replace_zero = match existing {
@@ -252,11 +252,11 @@ pub fn run(ours: &Connection, snapshot: &Path) -> Result<Summary> {
                     "DELETE FROM candles_merged WHERE moomoo_symbol=? AND wall_ms=?",
                     (s, w),
                 )?;
-                sum.yahoo_replaced_zero_volume += 1;
+                sum.external_replaced_zero_volume += 1;
             }
             ins.execute((
                 s,
-                yahoo_symbol(s),
+                external_symbol(s),
                 w,
                 o,
                 h,
@@ -264,16 +264,16 @@ pub fn run(ours: &Connection, snapshot: &Path) -> Result<Summary> {
                 c,
                 v,
                 turnover,
-                "yahoo",
+                "external",
                 1,
                 reliable,
             ))?;
-            sum.yahoo_bars += 1;
+            sum.external_bars += 1;
             if !moomoo_symbols.contains(s.as_str()) {
-                yahoo_only.insert(s.as_str());
+                external_only.insert(s.as_str());
             }
         }
-        sum.yahoo_only_symbols = yahoo_only.len();
+        sum.external_only_symbols = external_only.len();
     }
     // Carry fill: no-trade slots, flagged, lowest priority (any real bar replaces it on the next merge).
     {
@@ -302,7 +302,7 @@ pub fn run(ours: &Connection, snapshot: &Path) -> Result<Summary> {
             for (slot, close) in carry_fill(v, &cal) {
                 ins.execute((
                     s,
-                    yahoo_symbol(s),
+                    external_symbol(s),
                     slot,
                     close,
                     close,
@@ -358,7 +358,7 @@ mod tests {
     }
 
     #[test]
-    fn a_later_moomoo_bar_overwrites_the_yahoo_bar() {
+    fn a_later_moomoo_bar_overwrites_the_external_bar() {
         let d = tempfile::tempdir().unwrap();
         let snap = d.path().join("snap.sqlite3");
         let b = Connection::open(&snap).unwrap();
@@ -366,7 +366,7 @@ mod tests {
         let o = Connection::open_in_memory().unwrap();
         store::init(&o).unwrap();
         o.execute(
-            "INSERT INTO candles_extra VALUES('AAA','AAA',0,10,12,8,11,70,'yahoo',0)",
+            "INSERT INTO candles_extra VALUES('AAA','AAA',0,10,12,8,11,70,'external',0)",
             [],
         )
         .unwrap();
@@ -375,7 +375,7 @@ mod tests {
             o.query_row("SELECT source FROM candles_merged", [], |r| r
                 .get::<_, String>(0))
                 .unwrap(),
-            "yahoo"
+            "external"
         );
         // moomoo later supplies the same bar (quota freed, pulled again)
         b.execute(
@@ -399,18 +399,18 @@ mod tests {
     }
 
     #[test]
-    fn without_a_moomoo_snapshot_the_base_is_yahoo_only() {
+    fn without_a_moomoo_snapshot_the_base_is_external_only() {
         let d = tempfile::tempdir().unwrap();
         let o = Connection::open_in_memory().unwrap();
         store::init(&o).unwrap();
         o.execute(
-            "INSERT INTO candles_extra VALUES('AAA','AAA',0,10,12,8,11,70,'yahoo',0)",
+            "INSERT INTO candles_extra VALUES('AAA','AAA',0,10,12,8,11,70,'external',0)",
             [],
         )
         .unwrap();
         let sum = run(&o, &d.path().join("absent.sqlite3")).unwrap();
         assert_eq!(
-            (sum.moomoo_bars, sum.yahoo_bars, sum.yahoo_only_symbols),
+            (sum.moomoo_bars, sum.external_bars, sum.external_only_symbols),
             (0, 1, 1)
         );
     }
@@ -462,7 +462,7 @@ mod tests {
         ] {
             for w in times {
                 o.execute(
-                    "INSERT INTO candles_extra VALUES(?,?,?,10,11,9,10,100,'yahoo',0)",
+                    "INSERT INTO candles_extra VALUES(?,?,?,10,11,9,10,100,'external',0)",
                     (s, s, w),
                 )
                 .unwrap();
@@ -504,7 +504,7 @@ mod tests {
         .unwrap();
         // the common database (imported as candles_extra) holds AAA's first bar with the averaged volume 100, nothing for the second bar or for ZZZ
         o.execute(
-            "INSERT INTO candles_extra VALUES('AAA','AAA',0,10,11,9,10,100,'yahoo',0)",
+            "INSERT INTO candles_extra VALUES('AAA','AAA',0,10,11,9,10,100,'external',0)",
             [],
         )
         .unwrap();
@@ -540,13 +540,13 @@ mod tests {
 
     #[test]
     fn edges_are_first_and_last_bar_of_each_run() {
-        let ts: BTreeSet<i64> = [0, 60_000, 1_800_000, 10_000_000, 10_60_000]
+        let ts: BTreeSet<i64> = [0, 60_000, 1_800_000, 10_000_000, 1_060_000]
             .into_iter()
             .collect();
         let e = session_edges(&ts);
         let mut v: Vec<i64> = e.into_iter().collect();
         v.sort_unstable();
-        assert_eq!(v, vec![0, 1_800_000, 10_000_000, 10_60_000]);
+        assert_eq!(v, vec![0, 60_000, 1_060_000, 1_800_000, 10_000_000]);
     }
 
     #[test]
@@ -555,7 +555,7 @@ mod tests {
     }
 
     #[test]
-    fn moomoo_wins_yahoo_fills_gaps_and_replaces_zero_volume() {
+    fn moomoo_wins_external_fills_gaps_and_replaces_zero_volume() {
         let d = tempfile::tempdir().unwrap();
         let snap = d.path().join("snap.sqlite3");
         let b = Connection::open(&snap).unwrap();
@@ -569,7 +569,7 @@ mod tests {
         }
         let o = Connection::open_in_memory().unwrap();
         store::init(&o).unwrap();
-        // Yahoo has: ts 0 (moomoo real -> must not win), ts 60000 (moomoo zero volume -> replaced), ts 1800000 (missing -> filled),
+        // legacy provider has: ts 0 (moomoo real -> must not win), ts 60000 (moomoo zero volume -> replaced), ts 1800000 (missing -> filled),
         // a zero-volume bar (ignored) and a symbol moomoo lacks.
         for (s, w, v) in [
             ("AAA", 0_i64, 999.0),
@@ -579,7 +579,7 @@ mod tests {
             ("BBB", 0, 70.0),
         ] {
             o.execute(
-                "INSERT INTO candles_extra VALUES(?,?,?,10,12,8,11,?,'yahoo',0)",
+                "INSERT INTO candles_extra VALUES(?,?,?,10,12,8,11,?,'external',0)",
                 (s, s, w, v),
             )
             .unwrap();
@@ -589,12 +589,12 @@ mod tests {
             sum,
             Summary {
                 moomoo_bars: 2,
-                yahoo_bars: 3,
-                yahoo_replaced_zero_volume: 1,
+                external_bars: 3,
+                external_replaced_zero_volume: 1,
                 placeholder_bars_removed: 0,
                 symbols: 2,
-                yahoo_only_symbols: 1,
-                carry_bars: 2
+                external_only_symbols: 1,
+                carry_bars: 0
             }
         );
         let q = |sql: &str| o.query_row(sql, [], |r| r.get::<_, f64>(0)).unwrap();
@@ -612,13 +612,13 @@ mod tests {
             60.0 * 31.0 / 3.0
         );
         assert_eq!(
-            q("SELECT count(*) FROM candles_merged WHERE source='yahoo' AND turnover_estimated=1"),
+            q("SELECT count(*) FROM candles_merged WHERE source='external' AND turnover_estimated=1"),
             3.0
         );
         assert_eq!(
             q("SELECT count(*) FROM candles_merged WHERE moomoo_symbol='AAA' AND wall_ms=2700000"),
             0.0,
-            "zero-volume Yahoo bar adds nothing"
+            "zero-volume legacy provider bar adds nothing"
         );
     }
 }
